@@ -2,6 +2,7 @@ const ESPN_STANDINGS_BASE = "https://site.api.espn.com/apis/v2/sports";
 
 interface EspnStandingsEntry {
   team: { displayName: string };
+  stats?: Array<{ name: string; displayValue: string }>;
 }
 
 interface EspnStandingsResponse {
@@ -19,10 +20,15 @@ async function fetchStandingsMap(url: string): Promise<Map<string, number>> {
     if (!res.ok) return map;
     const data: EspnStandingsResponse = await res.json();
 
-    let rank = 1;
+    let positional = 1;
     for (const group of data.children ?? []) {
       for (const entry of group.standings?.entries ?? []) {
-        map.set(entry.team.displayName, rank++);
+        const seedStat = entry.stats?.find(
+          (s) => s.name === "playoffSeed" || s.name === "rank"
+        );
+        const rank = seedStat ? parseInt(seedStat.displayValue) || positional : positional;
+        map.set(entry.team.displayName, rank);
+        positional++;
       }
     }
   } catch {
