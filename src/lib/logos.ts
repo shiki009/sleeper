@@ -27,7 +27,7 @@ const NBA_LOGOS: Record<string, string> = {
   "Sacramento Kings": "https://a.espncdn.com/i/teamlogos/nba/500/sac.png",
   "San Antonio Spurs": "https://a.espncdn.com/i/teamlogos/nba/500/sa.png",
   "Toronto Raptors": "https://a.espncdn.com/i/teamlogos/nba/500/tor.png",
-  "Utah Jazz": "https://a.espncdn.com/i/teamlogos/nba/500/uta.png",
+  "Utah Jazz": "https://a.espncdn.com/i/teamlogos/nba/500/utah.png",
   "Washington Wizards": "https://a.espncdn.com/i/teamlogos/nba/500/wsh.png",
 };
 
