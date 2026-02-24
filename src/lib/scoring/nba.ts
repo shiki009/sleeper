@@ -4,12 +4,12 @@ import { clampScore, getLabel, type ExcitementResult, type EasterEgg } from "./t
 const BASE_SCORE = 4.5;
 
 function marginPoints(margin: number): number {
-  if (margin <= 3) return 1.5;
-  if (margin <= 6) return 1.0;
-  if (margin <= 10) return 0.5;
-  if (margin <= 15) return 0;
-  if (margin <= 20) return -0.5;
-  if (margin <= 30) return -1.0;
+  if (margin <= 5) return 1.5;
+  if (margin <= 10) return 1.0;
+  if (margin <= 15) return 0.5;
+  if (margin <= 20) return 0;
+  if (margin <= 25) return -0.5;
+  if (margin <= 35) return -1.0;
   return -1.5;
 }
 
@@ -105,9 +105,9 @@ function winProbDramaPoints(game: NbaGameData): number {
 
 function totalPointsPoints(game: NbaGameData): number {
   const total = game.homeTeam.score + game.awayTeam.score;
-  if (total >= 270) return 0.8;
-  if (total >= 250) return 0.5;
-  if (total >= 230) return 0.3;
+  if (total >= 270) return 0.4;
+  if (total >= 250) return 0.25;
+  if (total >= 230) return 0.15;
   return 0;
 }
 
