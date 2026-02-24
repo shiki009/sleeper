@@ -102,7 +102,23 @@ function physicalityPoints(game: NhlGameData): number {
   return -0.1;
 }
 
-export function calculateNhlExcitement(game: NhlGameData): ExcitementResult {
+function standingsBonus(homeRank?: number, awayRank?: number): number {
+  if (homeRank == null || awayRank == null) return 0;
+  const bothTop5 = homeRank <= 5 && awayRank <= 5;
+  const bothTop16 = homeRank <= 16 && awayRank <= 16;
+  const oneTop5 = homeRank <= 5 || awayRank <= 5;
+
+  if (bothTop5) return 1.0;
+  if (bothTop16) return 0.5;
+  if (oneTop5) return 0.3;
+  return 0;
+}
+
+export function calculateNhlExcitement(
+  game: NhlGameData,
+  homeRank?: number,
+  awayRank?: number
+): ExcitementResult {
   let points = BASE_SCORE;
 
   points += totalGoalsPoints(game.homeTeam.score + game.awayTeam.score);
@@ -114,6 +130,7 @@ export function calculateNhlExcitement(game: NhlGameData): ExcitementResult {
   points += comebackPoints(game);
   points += shotIntensityPoints(game);
   points += physicalityPoints(game);
+  points += standingsBonus(homeRank, awayRank);
 
   const score = clampScore(points);
   return { score, label: getLabel(score) };

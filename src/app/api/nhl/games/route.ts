@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGamesByDate } from "@/lib/api/nhl";
+import { getNhlStandings } from "@/lib/api/standings";
 import { calculateNhlExcitement, detectNhlEasterEggs } from "@/lib/scoring/nhl";
 import { type GameSummary } from "@/lib/scoring/types";
 
@@ -9,11 +10,18 @@ export async function GET(request: NextRequest) {
     searchParams.get("date") || new Date().toISOString().split("T")[0];
 
   try {
-    const allGames = await getGamesByDate(date);
+    const [allGames, standings] = await Promise.all([
+      getGamesByDate(date),
+      getNhlStandings(),
+    ]);
 
     const games: GameSummary[] = allGames.map((game) => {
       const isFinished = game.status === "STATUS_FINAL";
-      const excitement = isFinished ? calculateNhlExcitement(game) : undefined;
+      const homeRank = standings.get(game.homeTeam.name);
+      const awayRank = standings.get(game.awayTeam.name);
+      const excitement = isFinished
+        ? calculateNhlExcitement(game, homeRank, awayRank)
+        : undefined;
 
       const easterEggs = isFinished ? detectNhlEasterEggs(game) : undefined;
 

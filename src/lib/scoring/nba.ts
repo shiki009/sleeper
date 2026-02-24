@@ -120,7 +120,23 @@ function pacePoints(game: NbaGameData): number {
   return 0;
 }
 
-export function calculateNbaExcitement(game: NbaGameData): ExcitementResult {
+function standingsBonus(homeRank?: number, awayRank?: number): number {
+  if (homeRank == null || awayRank == null) return 0;
+  const bothTop5 = homeRank <= 5 && awayRank <= 5;
+  const bothTop10 = homeRank <= 10 && awayRank <= 10;
+  const oneTop5 = homeRank <= 5 || awayRank <= 5;
+
+  if (bothTop5) return 1.0;
+  if (bothTop10) return 0.6;
+  if (oneTop5) return 0.3;
+  return 0;
+}
+
+export function calculateNbaExcitement(
+  game: NbaGameData,
+  homeRank?: number,
+  awayRank?: number
+): ExcitementResult {
   let points = BASE_SCORE;
 
   const margin = Math.abs(game.homeTeam.score - game.awayTeam.score);
@@ -132,6 +148,7 @@ export function calculateNbaExcitement(game: NbaGameData): ExcitementResult {
   points += winProbDramaPoints(game);
   points += totalPointsPoints(game);
   points += pacePoints(game);
+  points += standingsBonus(homeRank, awayRank);
 
   const score = clampScore(points);
   return { score, label: getLabel(score) };

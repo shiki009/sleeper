@@ -138,8 +138,27 @@ function physicalPoints(match: FootballMatch): number {
   return -0.1;
 }
 
+function standingsBonus(homeRank?: number, awayRank?: number): number {
+  if (homeRank == null || awayRank == null) return 0;
+  const bothTop4 = homeRank <= 4 && awayRank <= 4;
+  const bothTop8 = homeRank <= 8 && awayRank <= 8;
+  const bothBottom4 = homeRank >= 17 && awayRank >= 17;
+  const oneTop4 = homeRank <= 4 || awayRank <= 4;
+  const oneBottom4 = homeRank >= 17 || awayRank >= 17;
+  const oneTop6 = homeRank <= 6 || awayRank <= 6;
+
+  if (bothTop4) return 1.0;
+  if (bothBottom4) return 0.8;
+  if (bothTop8) return 0.6;
+  if (oneTop4 && oneBottom4) return 0.5;
+  if (oneTop6) return 0.3;
+  return 0;
+}
+
 export function calculateFootballExcitement(
-  match: FootballMatch
+  match: FootballMatch,
+  homeRank?: number,
+  awayRank?: number
 ): ExcitementResult {
   const goals = [...match.goals].sort((a, b) => a.minute - b.minute);
   const homeId = match.homeTeam.id;
@@ -161,6 +180,8 @@ export function calculateFootballExcitement(
     points += possessionPoints(match);
     points += physicalPoints(match);
   }
+
+  points += standingsBonus(homeRank, awayRank);
 
   const score = clampScore(points);
   return { score, label: getLabel(score) };
