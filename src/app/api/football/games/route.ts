@@ -4,13 +4,13 @@ import { getFootballStandings } from "@/lib/api/standings";
 import { calculateFootballExcitement, detectFootballEasterEggs } from "@/lib/scoring/football";
 import { type GameSummary } from "@/lib/scoring/types";
 
-const COMPETITION_TO_SLUG: Record<string, string | null> = {
+const COMPETITION_TO_SLUG: Record<string, string> = {
   "Premier League": "eng.1",
   "La Liga": "esp.1",
   "Bundesliga": "ger.1",
   "Serie A": "ita.1",
   "Ligue 1": "fra.1",
-  "Champions League": null,
+  "Champions League": "uefa.champions",
 };
 
 function mapStatus(status: string): "finished" | "in_progress" | "scheduled" {
