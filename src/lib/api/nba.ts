@@ -18,6 +18,7 @@ interface EspnEvent {
     status: {
       type: { name: string; completed: boolean };
       period: number;
+      displayClock?: string;
     };
   }>;
 }
@@ -78,6 +79,7 @@ export interface NbaGameData {
   homeStats?: NbaTeamStats;
   awayStats?: NbaTeamStats;
   winProbSwings?: number; // count of big win-prob swings
+  clock?: string;
 }
 
 function formatDate(date: string): string {
@@ -145,6 +147,11 @@ export async function getGamesByDate(date: string): Promise<NbaGameData[]> {
     const away = comp.competitors.find((c) => c.homeAway === "away")!;
 
     if (!comp.status.type.completed) {
+      const isInProgress = comp.status.type.name !== "STATUS_SCHEDULED";
+      const clock =
+        isInProgress && comp.status.displayClock
+          ? `Q${comp.status.period} ${comp.status.displayClock}`
+          : undefined;
       games.push({
         id: event.id,
         homeTeam: {
@@ -159,6 +166,7 @@ export async function getGamesByDate(date: string): Promise<NbaGameData[]> {
         period: comp.status.period,
         date: event.date,
         plays: [],
+        clock,
       });
       continue;
     }

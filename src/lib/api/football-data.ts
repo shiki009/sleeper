@@ -37,7 +37,7 @@ interface EspnEvent {
     id: string;
     competitors: EspnCompetitor[];
     status: {
-      type: { name: string; completed: boolean };
+      type: { name: string; completed: boolean; detail?: string };
     };
   }>;
 }
@@ -93,6 +93,7 @@ export interface FootballMatch {
   cards: CardEvent[];
   homeStats?: TeamStats;
   awayStats?: TeamStats;
+  clock?: string;
 }
 
 function parseStats(
@@ -203,8 +204,12 @@ export async function getMatchesByDate(
 
         // Map ESPN status to our status
         let status = "FINISHED";
+        let clock: string | undefined;
         if (!completed) {
           status = statusName === "STATUS_SCHEDULED" ? "SCHEDULED" : "IN_PROGRESS";
+          if (status === "IN_PROGRESS") {
+            clock = comp.status.type.detail;
+          }
         }
 
         matches.push({
@@ -226,6 +231,7 @@ export async function getMatchesByDate(
           cards,
           homeStats,
           awayStats,
+          clock,
         });
       }
 

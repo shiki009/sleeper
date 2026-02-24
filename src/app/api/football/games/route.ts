@@ -67,6 +67,7 @@ export async function GET(request: NextRequest) {
           competition: match.competition,
           sport: "football" as const,
           status,
+          clock: status === "in_progress" ? match.clock : undefined,
           excitement,
           easterEggs,
           date: match.utcDate,

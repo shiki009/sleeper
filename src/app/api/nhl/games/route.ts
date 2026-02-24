@@ -25,17 +25,20 @@ export async function GET(request: NextRequest) {
 
       const easterEggs = isFinished ? detectNhlEasterEggs(game) : undefined;
 
+      const status = isFinished
+        ? ("finished" as const)
+        : game.status === "STATUS_SCHEDULED"
+          ? ("scheduled" as const)
+          : ("in_progress" as const);
+
       return {
         id: `nhl-${game.id}`,
         homeTeam: game.homeTeam.name,
         awayTeam: game.awayTeam.name,
         competition: "NHL",
         sport: "nhl" as const,
-        status: isFinished
-          ? ("finished" as const)
-          : game.status === "STATUS_SCHEDULED"
-            ? ("scheduled" as const)
-            : ("in_progress" as const),
+        status,
+        clock: status === "in_progress" ? game.clock : undefined,
         excitement,
         easterEggs,
         date: game.date,

@@ -128,7 +128,9 @@ export function GameCard({ game }: GameCardProps) {
               </>
             ) : (
               <Badge variant="outline">
-                {game.status === "scheduled" ? "Upcoming" : "In Progress"}
+                {game.status === "scheduled"
+                  ? "Upcoming"
+                  : game.clock ?? "In Progress"}
               </Badge>
             )}
           </div>

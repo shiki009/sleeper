@@ -18,6 +18,7 @@ interface EspnEvent {
     status: {
       type: { name: string; completed: boolean };
       period: number;
+      displayClock?: string;
     };
   }>;
 }
@@ -81,6 +82,7 @@ export interface NhlGameData {
   goals: NhlGoal[];
   homeStats?: NhlTeamStats;
   awayStats?: NhlTeamStats;
+  clock?: string;
 }
 
 function formatDate(date: string): string {
@@ -140,6 +142,14 @@ export async function getGamesByDate(date: string): Promise<NhlGameData[]> {
     const away = comp.competitors.find((c) => c.homeAway === "away")!;
 
     if (!comp.status.type.completed) {
+      const isInProgress = comp.status.type.name !== "STATUS_SCHEDULED";
+      let clock: string | undefined;
+      if (isInProgress && comp.status.displayClock) {
+        clock =
+          comp.status.period >= 4
+            ? `OT ${comp.status.displayClock}`
+            : `P${comp.status.period} ${comp.status.displayClock}`;
+      }
       games.push({
         id: event.id,
         homeTeam: {
@@ -156,6 +166,7 @@ export async function getGamesByDate(date: string): Promise<NhlGameData[]> {
         period: comp.status.period,
         date: event.date,
         goals: [],
+        clock,
       });
       continue;
     }

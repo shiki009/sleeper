@@ -17,6 +17,7 @@ export interface GameSummary {
   competition: string;
   sport: "football" | "nba" | "nhl";
   status: "finished" | "in_progress" | "scheduled";
+  clock?: string;
   excitement?: ExcitementResult;
   easterEggs?: EasterEgg[];
   date: string; // ISO date string
