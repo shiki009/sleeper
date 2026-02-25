@@ -138,14 +138,41 @@ function physicalPoints(match: FootballMatch): number {
   return -0.1;
 }
 
-function standingsBonus(homeRank?: number, awayRank?: number): number {
+function knockoutBonus(match: FootballMatch): number {
+  if (!match.isKnockout) return 0;
+
+  const stageBonuses: Record<string, number> = {
+    "Knockout Round Playoffs": 0.5,
+    "Rd of 16": 0.7,
+    "Quarterfinals": 0.9,
+    "Semifinals": 1.1,
+    "Final": 1.3,
+  };
+
+  let pts = stageBonuses[match.knockoutRound ?? ""] ?? 0.5;
+
+  // Close aggregate bonus: 2nd leg with aggregate diff <= 1
+  if (match.aggregateDiff != null && match.aggregateDiff <= 1) {
+    pts += 0.5;
+  }
+
+  return pts;
+}
+
+function standingsBonus(homeRank?: number, awayRank?: number, totalTeams: number = 20): number {
   if (homeRank == null || awayRank == null) return 0;
-  const bothTop4 = homeRank <= 4 && awayRank <= 4;
-  const bothTop8 = homeRank <= 8 && awayRank <= 8;
-  const bothBottom4 = homeRank >= 17 && awayRank >= 17;
-  const oneTop4 = homeRank <= 4 || awayRank <= 4;
-  const oneBottom4 = homeRank >= 17 || awayRank >= 17;
-  const oneTop6 = homeRank <= 6 || awayRank <= 6;
+
+  const top4Cutoff = Math.floor(totalTeams * 0.2);
+  const top6Cutoff = Math.floor(totalTeams * 0.3);
+  const top8Cutoff = Math.floor(totalTeams * 0.4);
+  const bottom4Cutoff = totalTeams - Math.floor(totalTeams * 0.2) + 1;
+
+  const bothTop4 = homeRank <= top4Cutoff && awayRank <= top4Cutoff;
+  const bothTop8 = homeRank <= top8Cutoff && awayRank <= top8Cutoff;
+  const bothBottom4 = homeRank >= bottom4Cutoff && awayRank >= bottom4Cutoff;
+  const oneTop4 = homeRank <= top4Cutoff || awayRank <= top4Cutoff;
+  const oneBottom4 = homeRank >= bottom4Cutoff || awayRank >= bottom4Cutoff;
+  const oneTop6 = homeRank <= top6Cutoff || awayRank <= top6Cutoff;
 
   if (bothTop4) return 1.0;
   if (bothBottom4) return 0.8;
@@ -158,7 +185,8 @@ function standingsBonus(homeRank?: number, awayRank?: number): number {
 export function calculateFootballExcitement(
   match: FootballMatch,
   homeRank?: number,
-  awayRank?: number
+  awayRank?: number,
+  totalTeams?: number
 ): ExcitementResult {
   const goals = [...match.goals].sort((a, b) => a.minute - b.minute);
   const homeId = match.homeTeam.id;
@@ -181,7 +209,8 @@ export function calculateFootballExcitement(
     points += physicalPoints(match);
   }
 
-  points += standingsBonus(homeRank, awayRank);
+  points += standingsBonus(homeRank, awayRank, totalTeams);
+  points += knockoutBonus(match);
 
   const score = clampScore(points);
   return { score, label: getLabel(score) };

@@ -19,6 +19,11 @@ interface EspnKeyEvent {
   }>;
 }
 
+interface EspnSeriesCompetitor {
+  id: string;
+  score: string;
+}
+
 interface EspnCompetitor {
   id: string;
   homeAway: "home" | "away";
@@ -39,6 +44,11 @@ interface EspnEvent {
     status: {
       type: { name: string; completed: boolean; detail?: string };
     };
+    series?: {
+      title: string;
+      competitors?: EspnSeriesCompetitor[];
+    };
+    leg?: { value: number };
   }>;
 }
 
@@ -94,6 +104,9 @@ export interface FootballMatch {
   homeStats?: TeamStats;
   awayStats?: TeamStats;
   clock?: string;
+  isKnockout?: boolean;
+  knockoutRound?: string;
+  aggregateDiff?: number;
 }
 
 function parseStats(
@@ -180,7 +193,7 @@ export async function getMatchesByDate(
             const minute = parseMinute(ke.clock?.displayValue || "");
             const teamId = ke.team?.id || "";
 
-            if (typeText.startsWith("Goal") || typeText === "Penalty - Loss of Lead Goal") {
+            if (typeText.startsWith("Goal") || typeText === "Penalty - Scored" || typeText === "Penalty - Loss of Lead Goal") {
               goals.push({
                 minute,
                 teamId,
@@ -200,6 +213,23 @@ export async function getMatchesByDate(
           const boxTeams = summary.boxscore?.teams;
           homeStats = parseStats(boxTeams, home.team.id);
           awayStats = parseStats(boxTeams, away.team.id);
+        }
+
+        // Parse knockout metadata from series info
+        const isKnockout = !!comp.series;
+        const knockoutRound = comp.series?.title;
+        let aggregateDiff: number | undefined;
+        if (
+          completed &&
+          comp.series?.competitors &&
+          comp.leg?.value === 2
+        ) {
+          const scores = comp.series.competitors.map((c) =>
+            parseInt(c.score) || 0
+          );
+          if (scores.length === 2) {
+            aggregateDiff = Math.abs(scores[0] - scores[1]);
+          }
         }
 
         // Map ESPN status to our status
@@ -232,6 +262,9 @@ export async function getMatchesByDate(
           homeStats,
           awayStats,
           clock,
+          isKnockout: isKnockout || undefined,
+          knockoutRound,
+          aggregateDiff,
         });
       }
 

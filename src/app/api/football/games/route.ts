@@ -50,9 +50,11 @@ export async function GET(request: NextRequest) {
         const homeRank = standings?.get(match.homeTeam.name);
         const awayRank = standings?.get(match.awayTeam.name);
 
+        const totalTeams = standings?.size;
+
         const excitement =
           status === "finished"
-            ? calculateFootballExcitement(match, homeRank, awayRank)
+            ? calculateFootballExcitement(match, homeRank, awayRank, totalTeams)
             : undefined;
 
         const easterEggs =
