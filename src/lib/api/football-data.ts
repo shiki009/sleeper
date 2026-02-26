@@ -171,7 +171,7 @@ function formatDateForEspn(date: string): string {
 }
 
 function parseOdds(espnOdds: EspnOdds[] | undefined): FootballOdds | undefined {
-  if (!espnOdds || espnOdds.length === 0) return undefined;
+  if (!espnOdds || espnOdds.length === 0 || !espnOdds[0]) return undefined;
   const odds = espnOdds[0];
 
   const overUnder = odds.overUnder;
