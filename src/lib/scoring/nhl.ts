@@ -1,4 +1,4 @@
-import { type NhlGameData } from "../api/nhl";
+import { type NhlGameData, type NhlOdds } from "../api/nhl";
 import { clampScore, getLabel, type ExcitementResult, type EasterEgg } from "./types";
 
 const BASE_SCORE = 4.0;
@@ -135,6 +135,97 @@ export function calculateNhlExcitement(
   const score = clampScore(points);
   return { score, label: getLabel(score) };
 }
+
+// ─── Odds-to-prediction translation helpers ─────────────────────────────────
+
+/** Convert American moneyline to implied probability (0-1). */
+function moneylineToProb(ml: number): number {
+  if (ml < 0) return Math.abs(ml) / (Math.abs(ml) + 100);
+  return 100 / (ml + 100);
+}
+
+/**
+ * Competitiveness bonus based on moneyline balance (2-way for NHL).
+ * Balanced odds suggest an unpredictable, competitive match (+bonus).
+ * Lopsided odds suggest a mismatch (-penalty).
+ * Range: -0.5 to +0.5
+ */
+function competitivenessBonus(homeMl?: number, awayMl?: number): number {
+  if (homeMl == null || awayMl == null) return 0;
+
+  const probs = [moneylineToProb(homeMl), moneylineToProb(awayMl)];
+  const total = probs.reduce((sum, p) => sum + p, 0);
+  const normalized = probs.map((p) => p / total);
+
+  const mean = normalized.reduce((sum, p) => sum + p, 0) / normalized.length;
+  const variance = normalized.reduce((sum, p) => sum + (p - mean) ** 2, 0) / normalized.length;
+  const stdDev = Math.sqrt(variance);
+
+  if (stdDev <= 0.03) return 0.5;
+  if (stdDev <= 0.06) return 0.3;
+  if (stdDev <= 0.10) return 0.1;
+  if (stdDev <= 0.15) return 0;
+  if (stdDev <= 0.20) return -0.2;
+  return -0.5;
+}
+
+/**
+ * Translate over/under line to predicted total goals.
+ * Returns NHL average (5.5) when undefined.
+ */
+function oddsToExpectedGoals(overUnder?: number): number {
+  if (overUnder == null) return 5.5;
+  return overUnder;
+}
+
+/**
+ * Translate spread to predicted score margin (absolute value).
+ * Returns moderate default (1.5) when undefined.
+ */
+function oddsToExpectedMargin(spread?: number): number {
+  if (spread == null) return 1.5;
+  return Math.abs(spread);
+}
+
+// ─── Pre-game excitement prediction ─────────────────────────────────────────
+
+export interface NhlPredictionInput {
+  odds: NhlOdds;
+  homeRank?: number;
+  awayRank?: number;
+}
+
+export function predictNhlExcitement(input: NhlPredictionInput): ExcitementResult {
+  const { odds, homeRank, awayRank } = input;
+
+  const expectedGoals = oddsToExpectedGoals(odds.overUnder);
+  const expectedMargin = oddsToExpectedMargin(odds.spread);
+
+  let points = BASE_SCORE;
+
+  // Reuse post-game totalGoalsPoints with predicted total
+  points += totalGoalsPoints(Math.round(expectedGoals));
+
+  // Derive closeness from spread: construct synthetic game-like diff
+  // closenessPoints in NHL uses Math.abs(home - away), so use margin directly
+  const roundedMargin = Math.round(expectedMargin);
+  if (roundedMargin === 0) points += 0.5;
+  else if (roundedMargin === 1) points += 0.3;
+  else if (roundedMargin === 2) points += 0;
+  else if (roundedMargin === 3) points += -0.3;
+  else points += -0.8;
+
+  // Competitiveness from moneyline balance
+  points += competitivenessBonus(odds.homeMoneyline, odds.awayMoneyline);
+
+  // Standings bonus
+  points += standingsBonus(homeRank, awayRank);
+
+  const score = clampScore(points);
+  return { score, label: getLabel(score), predicted: true };
+}
+
+// ─── Easter egg detection (post-game only) ──────────────────────────────────
 
 export function detectNhlEasterEggs(game: NhlGameData): EasterEgg[] {
   const eggs: EasterEgg[] = [];

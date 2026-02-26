@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { calculateNbaExcitement, detectNbaEasterEggs } from "../nba";
-import type { NbaGameData, NbaPlay, NbaTeamStats } from "../../api/nba";
+import { calculateNbaExcitement, detectNbaEasterEggs, predictNbaExcitement } from "../nba";
+import type { NbaGameData, NbaPlay, NbaTeamStats, NbaOdds } from "../../api/nba";
+import type { NbaPredictionInput } from "../nba";
 
 function makeNbaGame(overrides: Partial<NbaGameData> = {}): NbaGameData {
   return {
@@ -151,5 +152,91 @@ describe("detectNbaEasterEggs", () => {
     });
     const eggs = detectNbaEasterEggs(game);
     expect(eggs.length).toBe(0);
+  });
+});
+
+// ─── Prediction helpers ─────────────────────────────────────────────────────
+
+function makeOdds(overrides: Partial<NbaOdds> = {}): NbaOdds {
+  return {
+    overUnder: 220,
+    spread: 5,
+    homeMoneyline: -200,
+    awayMoneyline: +170,
+    ...overrides,
+  };
+}
+
+function makePredictionInput(overrides: Partial<NbaPredictionInput> = {}): NbaPredictionInput {
+  return {
+    odds: makeOdds(),
+    ...overrides,
+  };
+}
+
+describe("predictNbaExcitement", () => {
+  it("returns a result with predicted: true", () => {
+    const result = predictNbaExcitement(makePredictionInput());
+    expect(result.predicted).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(typeof result.label).toBe("string");
+  });
+
+  it("gives a higher score for tight spread and balanced moneylines", () => {
+    const exciting = predictNbaExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 1, homeMoneyline: -110, awayMoneyline: -110 }),
+      })
+    );
+    const boring = predictNbaExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 15, homeMoneyline: -800, awayMoneyline: +500 }),
+      })
+    );
+    expect(exciting.score).toBeGreaterThan(boring.score);
+  });
+
+  it("adds standings bonus when both teams are top-ranked", () => {
+    const without = predictNbaExcitement(makePredictionInput());
+    const with_ = predictNbaExcitement(
+      makePredictionInput({ homeRank: 1, awayRank: 2 })
+    );
+    expect(with_.score).toBeGreaterThan(without.score);
+  });
+
+  it("handles missing odds fields gracefully", () => {
+    const result = predictNbaExcitement(
+      makePredictionInput({
+        odds: { overUnder: undefined, spread: undefined, homeMoneyline: undefined, awayMoneyline: undefined },
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(result.predicted).toBe(true);
+  });
+
+  it("does not set predicted flag on post-game calculateNbaExcitement", () => {
+    const game = makeNbaGame();
+    const result = calculateNbaExcitement(game);
+    expect(result.predicted).toBeUndefined();
+  });
+
+  it("clamps extreme scores", () => {
+    const high = predictNbaExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 0, overUnder: 280, homeMoneyline: -105, awayMoneyline: -105 }),
+        homeRank: 1,
+        awayRank: 2,
+      })
+    );
+    expect(high.score).toBeLessThanOrEqual(10);
+
+    const low = predictNbaExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 20, overUnder: 180, homeMoneyline: -1000, awayMoneyline: +700 }),
+      })
+    );
+    expect(low.score).toBeGreaterThanOrEqual(1);
   });
 });

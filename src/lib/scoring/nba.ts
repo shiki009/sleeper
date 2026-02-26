@@ -1,4 +1,4 @@
-import { type NbaGameData } from "../api/nba";
+import { type NbaGameData, type NbaOdds } from "../api/nba";
 import { clampScore, getLabel, type ExcitementResult, type EasterEgg } from "./types";
 
 const BASE_SCORE = 4.5;
@@ -153,6 +153,76 @@ export function calculateNbaExcitement(
   const score = clampScore(points);
   return { score, label: getLabel(score) };
 }
+
+// ─── Odds-to-prediction translation helpers ─────────────────────────────────
+
+/** Convert American moneyline to implied probability (0-1). */
+function moneylineToProb(ml: number): number {
+  if (ml < 0) return Math.abs(ml) / (Math.abs(ml) + 100);
+  return 100 / (ml + 100);
+}
+
+/**
+ * Competitiveness bonus based on moneyline balance (2-way, no draw in NBA).
+ * Balanced odds suggest an unpredictable, competitive game (+bonus).
+ * Lopsided odds suggest a mismatch (-penalty).
+ * Range: -0.5 to +0.5
+ */
+function competitivenessBonus(homeMl?: number, awayMl?: number): number {
+  if (homeMl == null || awayMl == null) return 0;
+
+  const probs = [moneylineToProb(homeMl), moneylineToProb(awayMl)];
+  const total = probs.reduce((sum, p) => sum + p, 0);
+  const normalized = probs.map((p) => p / total);
+
+  const mean = normalized.reduce((sum, p) => sum + p, 0) / normalized.length;
+  const variance = normalized.reduce((sum, p) => sum + (p - mean) ** 2, 0) / normalized.length;
+  const stdDev = Math.sqrt(variance);
+
+  if (stdDev <= 0.03) return 0.5;
+  if (stdDev <= 0.06) return 0.3;
+  if (stdDev <= 0.10) return 0.1;
+  if (stdDev <= 0.15) return 0;
+  if (stdDev <= 0.20) return -0.2;
+  return -0.5;
+}
+
+// ─── Pre-game excitement prediction ─────────────────────────────────────────
+
+export interface NbaPredictionInput {
+  odds: NbaOdds;
+  homeRank?: number;
+  awayRank?: number;
+}
+
+export function predictNbaExcitement(input: NbaPredictionInput): ExcitementResult {
+  const { odds, homeRank, awayRank } = input;
+
+  // Translate odds to predicted game values
+  const expectedTotal = odds.overUnder ?? 215; // NBA average ~215
+  const expectedMargin = odds.spread != null ? Math.abs(odds.spread) : 5; // moderate default
+
+  let points = BASE_SCORE;
+
+  // Reuse post-game factor functions with predicted inputs
+  points += marginPoints(expectedMargin);
+
+  // totalPointsPoints: predict scoring volume from over/under
+  if (expectedTotal >= 270) points += 0.4;
+  else if (expectedTotal >= 250) points += 0.25;
+  else if (expectedTotal >= 230) points += 0.15;
+
+  // Competitiveness from moneyline balance
+  points += competitivenessBonus(odds.homeMoneyline, odds.awayMoneyline);
+
+  // Standings bonus
+  points += standingsBonus(homeRank, awayRank);
+
+  const score = clampScore(points);
+  return { score, label: getLabel(score), predicted: true };
+}
+
+// ─── Easter egg detection (post-game only) ──────────────────────────────────
 
 export function detectNbaEasterEggs(game: NbaGameData): EasterEgg[] {
   const eggs: EasterEgg[] = [];

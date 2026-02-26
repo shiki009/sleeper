@@ -20,6 +20,7 @@ interface EspnEvent {
       period: number;
       displayClock?: string;
     };
+    odds?: EspnOdds[];
   }>;
 }
 
@@ -38,6 +39,13 @@ interface EspnPlay {
   type: { id: string; text: string };
 }
 
+interface EspnOdds {
+  overUnder?: number;
+  spread?: number;
+  homeTeamOdds?: { moneyLine?: number };
+  awayTeamOdds?: { moneyLine?: number };
+}
+
 interface EspnTeamStats {
   team: { id: string; displayName: string };
   statistics: Array<{ name: string; displayValue: string }>;
@@ -46,6 +54,8 @@ interface EspnTeamStats {
 interface SummaryResponse {
   plays?: EspnPlay[];
   boxscore?: { teams?: EspnTeamStats[] };
+  odds?: EspnOdds[];
+  pickcenter?: EspnOdds[];
 }
 
 export interface NhlTeamStats {
@@ -72,6 +82,13 @@ export interface NhlGoal {
   awayScore: number;
 }
 
+export interface NhlOdds {
+  overUnder?: number;
+  spread?: number;
+  homeMoneyline?: number;
+  awayMoneyline?: number;
+}
+
 export interface NhlGameData {
   id: string;
   homeTeam: { id: string; name: string; score: number };
@@ -83,6 +100,7 @@ export interface NhlGameData {
   homeStats?: NhlTeamStats;
   awayStats?: NhlTeamStats;
   clock?: string;
+  odds?: NhlOdds;
 }
 
 function formatDate(date: string): string {
@@ -116,6 +134,22 @@ function parseStat(
     giveaways: get("giveaways"),
     faceoffPercent: get("faceoffPercent"),
   };
+}
+
+function parseOdds(espnOdds: EspnOdds[] | undefined): NhlOdds | undefined {
+  if (!espnOdds || espnOdds.length === 0 || !espnOdds[0]) return undefined;
+  const odds = espnOdds[0];
+
+  const overUnder = odds.overUnder;
+  const spread = odds.spread != null ? Math.abs(odds.spread) : undefined;
+  const homeMoneyline = odds.homeTeamOdds?.moneyLine;
+  const awayMoneyline = odds.awayTeamOdds?.moneyLine;
+
+  if (overUnder == null && spread == null && homeMoneyline == null && awayMoneyline == null) {
+    return undefined;
+  }
+
+  return { overUnder, spread, homeMoneyline, awayMoneyline };
 }
 
 async function fetchSummary(eventId: string): Promise<SummaryResponse> {
@@ -176,11 +210,14 @@ export async function getGamesByDate(date: string): Promise<NhlGameData[]> {
         date: event.date,
         goals: [],
         clock,
+        odds: parseOdds(comp.odds),
       });
       continue;
     }
 
     const summary = await fetchSummary(event.id);
+
+    const summaryOdds = parseOdds(summary.odds) || parseOdds(summary.pickcenter);
 
     // Extract goals from scoring plays
     const goals: NhlGoal[] = (summary.plays || [])
@@ -230,6 +267,7 @@ export async function getGamesByDate(date: string): Promise<NhlGameData[]> {
       goals,
       homeStats: parseStat(boxTeams, home.team.id),
       awayStats: parseStat(boxTeams, away.team.id),
+      odds: parseOdds(comp.odds) || summaryOdds,
     });
   }
 

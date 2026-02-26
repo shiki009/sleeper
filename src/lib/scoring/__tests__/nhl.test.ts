@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { calculateNhlExcitement, detectNhlEasterEggs } from "../nhl";
-import type { NhlGameData, NhlGoal, NhlTeamStats } from "../../api/nhl";
+import { calculateNhlExcitement, detectNhlEasterEggs, predictNhlExcitement } from "../nhl";
+import type { NhlGameData, NhlGoal, NhlTeamStats, NhlOdds } from "../../api/nhl";
+import type { NhlPredictionInput } from "../nhl";
 
 function makeNhlGame(overrides: Partial<NhlGameData> = {}): NhlGameData {
   return {
@@ -230,5 +231,103 @@ describe("detectNhlEasterEggs", () => {
     });
     const eggs = detectNhlEasterEggs(game);
     expect(eggs.length).toBe(0);
+  });
+});
+
+function makeOdds(overrides: Partial<NhlOdds> = {}): NhlOdds {
+  return {
+    overUnder: 6.0,
+    spread: 1.5,
+    homeMoneyline: -150,
+    awayMoneyline: +130,
+    ...overrides,
+  };
+}
+
+function makePredictionInput(overrides: Partial<NhlPredictionInput> = {}): NhlPredictionInput {
+  return {
+    odds: makeOdds(),
+    ...overrides,
+  };
+}
+
+describe("predictNhlExcitement", () => {
+  it("returns a result with predicted: true", () => {
+    const result = predictNhlExcitement(makePredictionInput());
+    expect(result.predicted).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(typeof result.label).toBe("string");
+  });
+
+  it("gives a higher score for high over/under and tight spread", () => {
+    const exciting = predictNhlExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: 7.5, spread: 0.5 }),
+      })
+    );
+    const boring = predictNhlExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: 4.0, spread: 3.0 }),
+      })
+    );
+    expect(exciting.score).toBeGreaterThan(boring.score);
+  });
+
+  it("gives a higher score for balanced moneylines", () => {
+    const balanced = predictNhlExcitement(
+      makePredictionInput({
+        odds: makeOdds({ homeMoneyline: -110, awayMoneyline: -110 }),
+      })
+    );
+    const lopsided = predictNhlExcitement(
+      makePredictionInput({
+        odds: makeOdds({ homeMoneyline: -500, awayMoneyline: +400 }),
+      })
+    );
+    expect(balanced.score).toBeGreaterThan(lopsided.score);
+  });
+
+  it("adds standings bonus when both teams are top-ranked", () => {
+    const without = predictNhlExcitement(makePredictionInput());
+    const with_ = predictNhlExcitement(
+      makePredictionInput({ homeRank: 1, awayRank: 2 })
+    );
+    expect(with_.score).toBeGreaterThan(without.score);
+  });
+
+  it("handles missing odds fields gracefully", () => {
+    const result = predictNhlExcitement(
+      makePredictionInput({
+        odds: { overUnder: undefined, spread: undefined, homeMoneyline: undefined, awayMoneyline: undefined },
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(result.predicted).toBe(true);
+  });
+
+  it("does not set predicted flag on post-game calculateNhlExcitement", () => {
+    const game = makeNhlGame();
+    const result = calculateNhlExcitement(game);
+    expect(result.predicted).toBeUndefined();
+  });
+
+  it("clamps extreme scores", () => {
+    const high = predictNhlExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 0, overUnder: 8.0, homeMoneyline: -110, awayMoneyline: -110 }),
+        homeRank: 1,
+        awayRank: 2,
+      })
+    );
+    expect(high.score).toBeLessThanOrEqual(10);
+
+    const low = predictNhlExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 4, overUnder: 3.5, homeMoneyline: -800, awayMoneyline: +500 }),
+      })
+    );
+    expect(low.score).toBeGreaterThanOrEqual(1);
   });
 });

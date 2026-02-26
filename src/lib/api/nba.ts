@@ -20,6 +20,7 @@ interface EspnEvent {
       period: number;
       displayClock?: string;
     };
+    odds?: EspnOdds[];
   }>;
 }
 
@@ -37,6 +38,13 @@ interface EspnPlay {
   text: string;
 }
 
+interface EspnOdds {
+  overUnder?: number;
+  spread?: number;
+  homeTeamOdds?: { moneyLine?: number };
+  awayTeamOdds?: { moneyLine?: number };
+}
+
 interface EspnTeamStats {
   team: { id: string; displayName: string };
   statistics: Array<{ name: string; displayValue: string }>;
@@ -46,6 +54,8 @@ interface SummaryResponse {
   plays?: EspnPlay[];
   boxscore?: { teams?: EspnTeamStats[] };
   winprobability?: Array<{ homeWinPercentage: number; playId: string }>;
+  odds?: EspnOdds[];
+  pickcenter?: EspnOdds[];
 }
 
 export interface NbaTeamStats {
@@ -68,6 +78,13 @@ export interface NbaPlay {
   scoringPlay: boolean;
 }
 
+export interface NbaOdds {
+  overUnder?: number;
+  spread?: number;
+  homeMoneyline?: number;
+  awayMoneyline?: number;
+}
+
 export interface NbaGameData {
   id: string;
   homeTeam: { name: string; score: number };
@@ -80,6 +97,23 @@ export interface NbaGameData {
   awayStats?: NbaTeamStats;
   winProbSwings?: number; // count of big win-prob swings
   clock?: string;
+  odds?: NbaOdds;
+}
+
+function parseOdds(espnOdds: EspnOdds[] | undefined): NbaOdds | undefined {
+  if (!espnOdds || espnOdds.length === 0 || !espnOdds[0]) return undefined;
+  const odds = espnOdds[0];
+
+  const overUnder = odds.overUnder;
+  const spread = odds.spread != null ? Math.abs(odds.spread) : undefined;
+  const homeMoneyline = odds.homeTeamOdds?.moneyLine;
+  const awayMoneyline = odds.awayTeamOdds?.moneyLine;
+
+  if (overUnder == null && spread == null && homeMoneyline == null && awayMoneyline == null) {
+    return undefined;
+  }
+
+  return { overUnder, spread, homeMoneyline, awayMoneyline };
 }
 
 function formatDate(date: string): string {
@@ -176,11 +210,13 @@ export async function getGamesByDate(date: string): Promise<NbaGameData[]> {
         date: event.date,
         plays: [],
         clock,
+        odds: parseOdds(comp.odds),
       });
       continue;
     }
 
     const summary = await fetchSummary(event.id);
+    const summaryOdds = parseOdds(summary.odds) || parseOdds(summary.pickcenter);
 
     const plays: NbaPlay[] = (summary.plays || []).map((p) => ({
       period: p.period.number,
@@ -210,6 +246,7 @@ export async function getGamesByDate(date: string): Promise<NbaGameData[]> {
       homeStats: parseStat(boxTeams, home.team.id),
       awayStats: parseStat(boxTeams, away.team.id),
       winProbSwings: countWinProbSwings(summary.winprobability),
+      odds: parseOdds(comp.odds) || summaryOdds,
     });
   }
 

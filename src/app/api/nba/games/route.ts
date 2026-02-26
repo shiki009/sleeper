@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGamesByDate } from "@/lib/api/nba";
 import { getNbaStandings } from "@/lib/api/standings";
-import { calculateNbaExcitement, detectNbaEasterEggs } from "@/lib/scoring/nba";
+import { calculateNbaExcitement, detectNbaEasterEggs, predictNbaExcitement } from "@/lib/scoring/nba";
 import { type GameSummary } from "@/lib/scoring/types";
 
 export async function GET(request: NextRequest) {
@@ -19,11 +19,30 @@ export async function GET(request: NextRequest) {
       const isFinished = game.status === "STATUS_FINAL";
       const homeRank = standings.get(game.homeTeam.name);
       const awayRank = standings.get(game.awayTeam.name);
-      const excitement = isFinished
-        ? calculateNbaExcitement(game, homeRank, awayRank)
-        : undefined;
 
-      const easterEggs = isFinished ? detectNbaEasterEggs(game) : undefined;
+      let excitement;
+      let easterEggs;
+      let predictedScore: number | undefined;
+
+      if (isFinished) {
+        excitement = calculateNbaExcitement(game, homeRank, awayRank);
+        easterEggs = detectNbaEasterEggs(game);
+
+        if (game.odds) {
+          const prediction = predictNbaExcitement({
+            odds: game.odds,
+            homeRank,
+            awayRank,
+          });
+          predictedScore = prediction.score;
+        }
+      } else if (game.status === "STATUS_SCHEDULED" && game.odds) {
+        excitement = predictNbaExcitement({
+          odds: game.odds,
+          homeRank,
+          awayRank,
+        });
+      }
 
       const status = isFinished
         ? ("finished" as const)
@@ -41,6 +60,7 @@ export async function GET(request: NextRequest) {
         clock: status === "in_progress" ? game.clock : undefined,
         excitement,
         easterEggs,
+        predictedScore,
         date: game.date,
       };
     });
