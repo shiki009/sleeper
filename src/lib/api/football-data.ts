@@ -8,6 +8,8 @@ const LEAGUES = [
   { slug: "ita.1", name: "Serie A" },
   { slug: "fra.1", name: "Ligue 1" },
   { slug: "uefa.champions", name: "Champions League" },
+  { slug: "uefa.europa", name: "Europa League" },
+  { slug: "uefa.europa.conf", name: "Conference League" },
 ];
 
 interface EspnKeyEvent {

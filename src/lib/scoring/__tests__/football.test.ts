@@ -97,6 +97,101 @@ describe("calculateFootballExcitement", () => {
     expect(result.score).toBeGreaterThanOrEqual(1);
     expect(result.score).toBeLessThanOrEqual(10);
   });
+
+  it("scores Europa League matches identically to domestic matches", () => {
+    const goals: GoalEvent[] = [
+      { minute: 20, teamId: "home" },
+      { minute: 70, teamId: "away" },
+    ];
+    const domestic = makeMatch({
+      competition: "Premier League",
+      homeScore: 1,
+      awayScore: 1,
+      goals,
+    });
+    const europa = makeMatch({
+      competition: "Europa League",
+      homeScore: 1,
+      awayScore: 1,
+      goals,
+    });
+    const domesticResult = calculateFootballExcitement(domestic);
+    const europaResult = calculateFootballExcitement(europa);
+    expect(europaResult.score).toBe(domesticResult.score);
+    expect(europaResult.label).toBe(domesticResult.label);
+  });
+
+  it("scores Conference League matches identically to domestic matches", () => {
+    const goals: GoalEvent[] = [
+      { minute: 35, teamId: "home" },
+      { minute: 55, teamId: "home" },
+      { minute: 80, teamId: "away" },
+    ];
+    const domestic = makeMatch({
+      competition: "La Liga",
+      homeScore: 2,
+      awayScore: 1,
+      goals,
+    });
+    const conference = makeMatch({
+      competition: "Conference League",
+      homeScore: 2,
+      awayScore: 1,
+      goals,
+    });
+    const domesticResult = calculateFootballExcitement(domestic);
+    const conferenceResult = calculateFootballExcitement(conference);
+    expect(conferenceResult.score).toBe(domesticResult.score);
+    expect(conferenceResult.label).toBe(domesticResult.label);
+  });
+
+  it("applies knockout bonus for Europa League knockout matches", () => {
+    const goals: GoalEvent[] = [
+      { minute: 30, teamId: "home" },
+      { minute: 60, teamId: "away" },
+    ];
+    const leaguePhase = makeMatch({
+      competition: "Europa League",
+      homeScore: 1,
+      awayScore: 1,
+      goals,
+    });
+    const knockout = makeMatch({
+      competition: "Europa League",
+      homeScore: 1,
+      awayScore: 1,
+      goals,
+      isKnockout: true,
+      knockoutRound: "Quarterfinals",
+    });
+    const leagueResult = calculateFootballExcitement(leaguePhase);
+    const knockoutResult = calculateFootballExcitement(knockout);
+    expect(knockoutResult.score).toBeGreaterThan(leagueResult.score);
+  });
+
+  it("applies knockout bonus for Conference League knockout matches", () => {
+    const goals: GoalEvent[] = [
+      { minute: 15, teamId: "away" },
+      { minute: 45, teamId: "home" },
+    ];
+    const leaguePhase = makeMatch({
+      competition: "Conference League",
+      homeScore: 1,
+      awayScore: 1,
+      goals,
+    });
+    const knockout = makeMatch({
+      competition: "Conference League",
+      homeScore: 1,
+      awayScore: 1,
+      goals,
+      isKnockout: true,
+      knockoutRound: "Semifinals",
+    });
+    const leagueResult = calculateFootballExcitement(leaguePhase);
+    const knockoutResult = calculateFootballExcitement(knockout);
+    expect(knockoutResult.score).toBeGreaterThan(leagueResult.score);
+  });
 });
 
 describe("detectFootballEasterEggs", () => {
@@ -200,5 +295,37 @@ describe("detectFootballEasterEggs", () => {
     });
     const eggs = detectFootballEasterEggs(match);
     expect(eggs.length).toBe(0);
+  });
+
+  it("detects easter eggs for Europa League matches", () => {
+    const match = makeMatch({
+      competition: "Europa League",
+      homeScore: 3,
+      awayScore: 2,
+      goals: [
+        { minute: 10, teamId: "home" },
+        { minute: 20, teamId: "away" },
+        { minute: 30, teamId: "home" },
+        { minute: 50, teamId: "away" },
+        { minute: 70, teamId: "home" },
+      ],
+    });
+    const eggs = detectFootballEasterEggs(match);
+    expect(eggs.find((e) => e.id === "goalfest")).toBeTruthy();
+  });
+
+  it("detects easter eggs for Conference League matches", () => {
+    const match = makeMatch({
+      competition: "Conference League",
+      homeScore: 2,
+      awayScore: 1,
+      goals: [
+        { minute: 10, teamId: "home" },
+        { minute: 50, teamId: "away" },
+        { minute: 92, teamId: "home" },
+      ],
+    });
+    const eggs = detectFootballEasterEggs(match);
+    expect(eggs.find((e) => e.id === "cardiac")).toBeTruthy();
   });
 });
