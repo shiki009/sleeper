@@ -36,6 +36,20 @@ interface EspnCompetitor {
   score: string;
 }
 
+interface EspnOdds {
+  overUnder?: number;
+  spread?: number;
+  homeTeamOdds?: {
+    moneyLine?: number;
+  };
+  awayTeamOdds?: {
+    moneyLine?: number;
+  };
+  drawOdds?: {
+    moneyLine?: number;
+  };
+}
+
 interface EspnEvent {
   id: string;
   date: string;
@@ -51,6 +65,7 @@ interface EspnEvent {
       competitors?: EspnSeriesCompetitor[];
     };
     leg?: { value: number };
+    odds?: EspnOdds[];
   }>;
 }
 
@@ -92,6 +107,14 @@ export interface TeamStats {
   saves: number;
 }
 
+export interface FootballOdds {
+  overUnder?: number;
+  spread?: number;
+  homeMoneyline?: number;
+  awayMoneyline?: number;
+  drawMoneyline?: number;
+}
+
 export interface FootballMatch {
   id: string;
   status: string;
@@ -109,6 +132,7 @@ export interface FootballMatch {
   isKnockout?: boolean;
   knockoutRound?: string;
   aggregateDiff?: number;
+  odds?: FootballOdds;
 }
 
 function parseStats(
@@ -144,6 +168,30 @@ function parseMinute(displayValue: string): number {
 function formatDateForEspn(date: string): string {
   // "2026-02-22" -> "20260222"
   return date.replace(/-/g, "");
+}
+
+function parseOdds(espnOdds: EspnOdds[] | undefined): FootballOdds | undefined {
+  if (!espnOdds || espnOdds.length === 0) return undefined;
+  const odds = espnOdds[0];
+
+  const overUnder = odds.overUnder;
+  const spread = odds.spread != null ? Math.abs(odds.spread) : undefined;
+  const homeMoneyline = odds.homeTeamOdds?.moneyLine;
+  const awayMoneyline = odds.awayTeamOdds?.moneyLine;
+  const drawMoneyline = odds.drawOdds?.moneyLine;
+
+  // Only return odds if at least one meaningful field is present
+  if (
+    overUnder == null &&
+    spread == null &&
+    homeMoneyline == null &&
+    awayMoneyline == null &&
+    drawMoneyline == null
+  ) {
+    return undefined;
+  }
+
+  return { overUnder, spread, homeMoneyline, awayMoneyline, drawMoneyline };
 }
 
 async function fetchSummary(
@@ -244,6 +292,9 @@ export async function getMatchesByDate(
           }
         }
 
+        // Parse odds for scheduled games
+        const odds = status === "SCHEDULED" ? parseOdds(comp.odds) : undefined;
+
         matches.push({
           id: event.id,
           status,
@@ -267,6 +318,7 @@ export async function getMatchesByDate(
           isKnockout: isKnockout || undefined,
           knockoutRound,
           aggregateDiff,
+          odds,
         });
       }
 

@@ -1,7 +1,10 @@
-import { type FootballMatch, type GoalEvent } from "../api/football-data";
+import { type FootballMatch, type FootballOdds, type GoalEvent } from "../api/football-data";
 import { clampScore, getLabel, type ExcitementResult, type EasterEgg } from "./types";
 
 const BASE_SCORE = 4.5;
+const PREDICTION_BASE_SCORE = 4.5;
+
+// ─── Post-game factor functions ─────────────────────────────────────────────
 
 function totalGoalsPoints(totalGoals: number): number {
   if (totalGoals === 0) return -1.5;
@@ -182,6 +185,8 @@ function standingsBonus(homeRank?: number, awayRank?: number, totalTeams: number
   return 0;
 }
 
+// ─── Post-game excitement calculation ───────────────────────────────────────
+
 export function calculateFootballExcitement(
   match: FootballMatch,
   homeRank?: number,
@@ -215,6 +220,109 @@ export function calculateFootballExcitement(
   const score = clampScore(points);
   return { score, label: getLabel(score) };
 }
+
+// ─── Pre-game prediction factor functions ───────────────────────────────────
+
+function overUnderPoints(overUnder?: number): number {
+  if (overUnder == null) return 0;
+  if (overUnder <= 1.5) return -1.0;
+  if (overUnder <= 2.0) return -0.3;
+  if (overUnder <= 2.5) return 0;
+  if (overUnder <= 3.0) return 0.4;
+  if (overUnder <= 3.5) return 0.8;
+  return 1.2; // 4.0+
+}
+
+function spreadClosenessPoints(spread?: number): number {
+  if (spread == null) return 0;
+  const abs = Math.abs(spread);
+  if (abs <= 0.5) return 0.8;
+  if (abs <= 1.0) return 0.4;
+  if (abs <= 1.5) return 0;
+  if (abs <= 2.0) return -0.3;
+  return -0.8; // 2.5+
+}
+
+/** Convert American moneyline to implied probability (0-1). */
+function moneylineToProb(ml: number): number {
+  if (ml < 0) return Math.abs(ml) / (Math.abs(ml) + 100);
+  return 100 / (ml + 100);
+}
+
+function moneylineBalancePoints(
+  homeMl?: number,
+  awayMl?: number,
+  drawMl?: number
+): number {
+  // Need at least home and away moneyline to compute balance
+  if (homeMl == null || awayMl == null) return 0;
+
+  const probs: number[] = [moneylineToProb(homeMl), moneylineToProb(awayMl)];
+  if (drawMl != null) {
+    probs.push(moneylineToProb(drawMl));
+  }
+
+  // Normalize probabilities to sum to 1 (bookmaker vig removal)
+  const total = probs.reduce((sum, p) => sum + p, 0);
+  const normalized = probs.map((p) => p / total);
+
+  // Standard deviation of normalized probabilities
+  const mean = normalized.reduce((sum, p) => sum + p, 0) / normalized.length;
+  const variance =
+    normalized.reduce((sum, p) => sum + (p - mean) ** 2, 0) / normalized.length;
+  const stdDev = Math.sqrt(variance);
+
+  if (stdDev <= 0.05) return 1.0;
+  if (stdDev <= 0.10) return 0.6;
+  if (stdDev <= 0.15) return 0.3;
+  if (stdDev <= 0.20) return 0;
+  if (stdDev <= 0.25) return -0.3;
+  return -0.5; // heavy favorite
+}
+
+function predictionKnockoutBonus(
+  isKnockout?: boolean,
+  knockoutRound?: string
+): number {
+  if (!isKnockout) return 0;
+
+  const stageBonuses: Record<string, number> = {
+    "Knockout Round Playoffs": 0.5,
+    "Rd of 16": 0.7,
+    "Quarterfinals": 0.9,
+    "Semifinals": 1.1,
+    "Final": 1.3,
+  };
+
+  return stageBonuses[knockoutRound ?? ""] ?? 0.5;
+}
+
+// ─── Pre-game excitement prediction ─────────────────────────────────────────
+
+export interface PredictionInput {
+  odds: FootballOdds;
+  homeRank?: number;
+  awayRank?: number;
+  totalTeams?: number;
+  isKnockout?: boolean;
+  knockoutRound?: string;
+}
+
+export function predictFootballExcitement(input: PredictionInput): ExcitementResult {
+  const { odds, homeRank, awayRank, totalTeams, isKnockout, knockoutRound } = input;
+
+  let points = PREDICTION_BASE_SCORE;
+  points += overUnderPoints(odds.overUnder);
+  points += spreadClosenessPoints(odds.spread);
+  points += moneylineBalancePoints(odds.homeMoneyline, odds.awayMoneyline, odds.drawMoneyline);
+  points += standingsBonus(homeRank, awayRank, totalTeams);
+  points += predictionKnockoutBonus(isKnockout, knockoutRound);
+
+  const score = clampScore(points);
+  return { score, label: getLabel(score), predicted: true };
+}
+
+// ─── Easter egg detection (post-game only) ──────────────────────────────────
 
 export function detectFootballEasterEggs(match: FootballMatch): EasterEgg[] {
   const eggs: EasterEgg[] = [];

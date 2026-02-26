@@ -33,6 +33,15 @@ function getPrevDay(date: string): string {
   return d.toISOString().split("T")[0];
 }
 
+// Sort scheduled games: those with predictions first (by score desc), then those without
+function sortScheduledGames(games: GameSummary[]): GameSummary[] {
+  return [...games].sort((a, b) => {
+    const aScore = a.excitement?.predicted ? a.excitement.score : -1;
+    const bScore = b.excitement?.predicted ? b.excitement.score : -1;
+    return bScore - aScore;
+  });
+}
+
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3">
@@ -121,13 +130,15 @@ export function GameList({ sport, date }: GameListProps) {
     const cacheKey = `${sport}:${date}`;
     const cached = clientCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < CLIENT_CACHE_TTL) {
-      // Use cached data immediately — no loading skeleton
+      // Use cached data immediately -- no loading skeleton
       const forDate = cached.games;
       const finished = forDate
         .filter((g) => g.status === "finished" && g.excitement)
         .sort((a, b) => (b.excitement?.score ?? 0) - (a.excitement?.score ?? 0));
       const live = forDate.filter((g) => g.status === "in_progress");
-      const scheduled = forDate.filter((g) => g.status === "scheduled");
+      const scheduled = sortScheduledGames(
+        forDate.filter((g) => g.status === "scheduled")
+      );
       setGames(finished);
       setLiveGames(live);
       setScheduledGames(scheduled);
@@ -188,7 +199,9 @@ export function GameList({ sport, date }: GameListProps) {
         .sort((a, b) => (b.excitement?.score ?? 0) - (a.excitement?.score ?? 0));
 
       const live = forDate.filter((g) => g.status === "in_progress");
-      const scheduled = forDate.filter((g) => g.status === "scheduled");
+      const scheduled = sortScheduledGames(
+        forDate.filter((g) => g.status === "scheduled")
+      );
 
       setGames(finished);
       setLiveGames(live);

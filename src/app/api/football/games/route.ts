@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMatchesByDate } from "@/lib/api/football-data";
 import { getFootballStandings } from "@/lib/api/standings";
-import { calculateFootballExcitement, detectFootballEasterEggs } from "@/lib/scoring/football";
+import {
+  calculateFootballExcitement,
+  detectFootballEasterEggs,
+  predictFootballExcitement,
+} from "@/lib/scoring/football";
 import { type GameSummary } from "@/lib/scoring/types";
 
 const COMPETITION_TO_SLUG: Record<string, string> = {
@@ -36,7 +40,7 @@ export async function GET(request: NextRequest) {
       ...leagueSlugs.map((slug) => getFootballStandings(slug)),
     ]);
 
-    // Build a slug → standings map
+    // Build a slug -> standings map
     const standingsBySlug = new Map<string, Map<string, number>>();
     leagueSlugs.forEach((slug, i) => {
       standingsBySlug.set(slug, standingsResults[i]);
@@ -54,15 +58,23 @@ export async function GET(request: NextRequest) {
 
         const totalTeams = standings?.size;
 
-        const excitement =
-          status === "finished"
-            ? calculateFootballExcitement(match, homeRank, awayRank, totalTeams)
-            : undefined;
+        let excitement;
+        let easterEggs;
 
-        const easterEggs =
-          status === "finished"
-            ? detectFootballEasterEggs(match)
-            : undefined;
+        if (status === "finished") {
+          excitement = calculateFootballExcitement(match, homeRank, awayRank, totalTeams);
+          easterEggs = detectFootballEasterEggs(match);
+        } else if (status === "scheduled" && match.odds) {
+          // Pre-game prediction using odds data
+          excitement = predictFootballExcitement({
+            odds: match.odds,
+            homeRank,
+            awayRank,
+            totalTeams,
+            isKnockout: match.isKnockout,
+            knockoutRound: match.knockoutRound,
+          });
+        }
 
         return {
           id: `football-${match.id}`,

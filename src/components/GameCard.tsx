@@ -9,7 +9,8 @@ import { ExcitementMeter } from "./ExcitementMeter";
 import { type GameSummary } from "@/lib/scoring/types";
 import { getTeamLogo } from "@/lib/logos";
 
-function getBadgeVariant(label: string) {
+function getBadgeVariant(label: string, predicted?: boolean) {
+  if (predicted) return "outline" as const;
   switch (label) {
     case "Must Watch":
       return "destructive" as const;
@@ -45,8 +46,8 @@ function formatGameTime(dateStr: string): string | null {
   }
 }
 
-function isMustWatch(score?: number): boolean {
-  return !!score && score >= 8;
+function isMustWatch(score?: number, predicted?: boolean): boolean {
+  return !!score && score >= 8 && !predicted;
 }
 
 interface GameCardProps {
@@ -57,7 +58,8 @@ export function GameCard({ game }: GameCardProps) {
   const [revealed, setRevealed] = useState(false);
   const { excitement } = game;
   const gameTime = formatGameTime(game.date);
-  const mustWatch = isMustWatch(excitement?.score);
+  const isPredicted = excitement?.predicted === true;
+  const mustWatch = isMustWatch(excitement?.score, isPredicted);
   const homeLogo = getTeamLogo(game.sport, game.homeTeam);
   const awayLogo = getTeamLogo(game.sport, game.awayTeam);
 
@@ -120,11 +122,18 @@ export function GameCard({ game }: GameCardProps) {
           <div className="flex flex-col items-center gap-2 shrink-0">
             {excitement ? (
               <>
-                <ExcitementMeter score={excitement.score} />
-                <Badge variant={getBadgeVariant(excitement.label)}>
-                  {mustWatch && <Flame className="w-3 h-3 mr-1" />}
-                  {excitement.label}
-                </Badge>
+                <ExcitementMeter score={excitement.score} predicted={isPredicted} />
+                <div className="flex flex-col items-center gap-0.5">
+                  <Badge variant={getBadgeVariant(excitement.label, isPredicted)}>
+                    {mustWatch && <Flame className="w-3 h-3 mr-1" />}
+                    {excitement.label}
+                  </Badge>
+                  {isPredicted && (
+                    <span className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">
+                      Predicted
+                    </span>
+                  )}
+                </div>
               </>
             ) : (
               <Badge variant="outline">
