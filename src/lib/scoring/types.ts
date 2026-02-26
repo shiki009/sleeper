@@ -21,6 +21,7 @@ export interface GameSummary {
   clock?: string;
   excitement?: ExcitementResult;
   easterEggs?: EasterEgg[];
+  predictedScore?: number; // pre-game predicted excitement score (1-10), for finished football games with odds data
   date: string; // ISO date string
 }
 

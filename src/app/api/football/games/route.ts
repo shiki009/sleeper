@@ -60,10 +60,24 @@ export async function GET(request: NextRequest) {
 
         let excitement;
         let easterEggs;
+        let predictedScore: number | undefined;
 
         if (status === "finished") {
           excitement = calculateFootballExcitement(match, homeRank, awayRank, totalTeams);
           easterEggs = detectFootballEasterEggs(match);
+
+          // Compute predicted score if odds data is available for finished games
+          if (match.odds) {
+            const prediction = predictFootballExcitement({
+              odds: match.odds,
+              homeRank,
+              awayRank,
+              totalTeams,
+              isKnockout: match.isKnockout,
+              knockoutRound: match.knockoutRound,
+            });
+            predictedScore = prediction.score;
+          }
         } else if (status === "scheduled" && match.odds) {
           // Pre-game prediction using odds data
           excitement = predictFootballExcitement({
@@ -86,6 +100,7 @@ export async function GET(request: NextRequest) {
           clock: status === "in_progress" ? match.clock : undefined,
           excitement,
           easterEggs,
+          predictedScore,
           date: match.utcDate,
         };
       })

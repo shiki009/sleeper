@@ -586,3 +586,144 @@ describe("predictFootballExcitement", () => {
     expect(result.predicted).toBeUndefined();
   });
 });
+
+describe("predictFootballExcitement - tuned score range", () => {
+  it("produces a score below 3 for very boring matchups", () => {
+    // Low O/U, wide spread, lopsided odds -- should be a clear Skip It
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 1.5,
+          spread: 3.0,
+          homeMoneyline: -500,
+          awayMoneyline: +1000,
+          drawMoneyline: +500,
+        }),
+      })
+    );
+    expect(result.score).toBeLessThan(3);
+    expect(result.label).toBe("Skip It");
+  });
+
+  it("produces a score above 8 for very exciting matchups without knockout bonus", () => {
+    // High O/U, tight spread, balanced odds, top standings
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 4.0,
+          spread: 0.5,
+          homeMoneyline: +200,
+          awayMoneyline: +200,
+          drawMoneyline: +200,
+        }),
+        homeRank: 1,
+        awayRank: 2,
+        totalTeams: 20,
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(8);
+    expect(result.label).toBe("Must Watch");
+  });
+
+  it("produces a mid-range score (4-6) for average matchups", () => {
+    // Average O/U (2.5), moderate spread (1.5), no standings
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 2.5,
+          spread: 1.5,
+          homeMoneyline: -150,
+          awayMoneyline: +300,
+          drawMoneyline: +280,
+        }),
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(3);
+    expect(result.score).toBeLessThanOrEqual(6);
+  });
+
+  it("has at least 5 points spread between boring and exciting predictions", () => {
+    const boring = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 1.5,
+          spread: 3.0,
+          homeMoneyline: -500,
+          awayMoneyline: +1000,
+          drawMoneyline: +500,
+        }),
+      })
+    );
+    const exciting = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 4.0,
+          spread: 0.5,
+          homeMoneyline: +200,
+          awayMoneyline: +200,
+          drawMoneyline: +200,
+        }),
+        homeRank: 1,
+        awayRank: 2,
+        totalTeams: 20,
+      })
+    );
+    expect(exciting.score - boring.score).toBeGreaterThanOrEqual(5);
+  });
+
+  it("over/under is the strongest single prediction factor", () => {
+    // Same odds except O/U varies
+    const lowOU = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: 1.5 }),
+      })
+    );
+    const highOU = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: 4.0 }),
+      })
+    );
+    // O/U range is [-1.5, +2.0] = 3.5 total -- should produce significant difference
+    expect(highOU.score - lowOU.score).toBeGreaterThanOrEqual(3);
+  });
+
+  it("spread closeness has meaningful impact", () => {
+    const tight = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 0.5 }),
+      })
+    );
+    const wide = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 3.0 }),
+      })
+    );
+    // Spread range is [-1.2, +1.2] = 2.4 total
+    expect(tight.score - wide.score).toBeGreaterThanOrEqual(2);
+  });
+
+  it("moneyline balance has meaningful impact", () => {
+    // Perfectly balanced odds
+    const balanced = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          homeMoneyline: +200,
+          awayMoneyline: +200,
+          drawMoneyline: +200,
+        }),
+      })
+    );
+    // Heavy favorite
+    const lopsided = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          homeMoneyline: -1000,
+          awayMoneyline: +2000,
+          drawMoneyline: +1500,
+        }),
+      })
+    );
+    // Moneyline range is [-1.0, +1.5] = 2.5 total
+    expect(balanced.score - lopsided.score).toBeGreaterThanOrEqual(2);
+  });
+});

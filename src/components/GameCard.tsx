@@ -50,6 +50,17 @@ function isMustWatch(score?: number, predicted?: boolean): boolean {
   return !!score && score >= 8 && !predicted;
 }
 
+function formatDelta(actual: number, predicted: number): { text: string; colorClass: string } {
+  const delta = Math.round((actual - predicted) * 10) / 10;
+  const absDelta = Math.abs(delta);
+  if (delta > 0) {
+    return { text: `+${absDelta.toFixed(1)} vs predicted`, colorClass: "text-emerald-600 dark:text-emerald-400" };
+  } else if (delta < 0) {
+    return { text: `-${absDelta.toFixed(1)} vs predicted`, colorClass: "text-amber-600 dark:text-amber-400" };
+  }
+  return { text: "= predicted", colorClass: "text-muted-foreground/60" };
+}
+
 interface GameCardProps {
   game: GameSummary;
 }
@@ -62,6 +73,17 @@ export function GameCard({ game }: GameCardProps) {
   const mustWatch = isMustWatch(excitement?.score, isPredicted);
   const homeLogo = getTeamLogo(game.sport, game.homeTeam);
   const awayLogo = getTeamLogo(game.sport, game.awayTeam);
+
+  // Show prediction comparison for finished games with a predicted score
+  const showPredictionComparison =
+    game.status === "finished" &&
+    game.predictedScore != null &&
+    excitement != null &&
+    !isPredicted;
+
+  const delta = showPredictionComparison
+    ? formatDelta(excitement.score, game.predictedScore!)
+    : undefined;
 
   return (
     <Card className={`card-hover ${mustWatch ? "must-watch-card" : ""}`}>
@@ -131,6 +153,11 @@ export function GameCard({ game }: GameCardProps) {
                   {isPredicted && (
                     <span className="text-[10px] text-muted-foreground/60 font-medium uppercase tracking-wider">
                       Predicted
+                    </span>
+                  )}
+                  {delta && (
+                    <span className={`text-[10px] font-medium ${delta.colorClass}`}>
+                      {delta.text}
                     </span>
                   )}
                 </div>
