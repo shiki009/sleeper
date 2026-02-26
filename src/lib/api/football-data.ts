@@ -83,6 +83,8 @@ interface SummaryResponse {
   boxscore?: {
     teams?: EspnTeamStats[];
   };
+  odds?: EspnOdds[];
+  pickcenter?: EspnOdds[];
 }
 
 export interface GoalEvent {
@@ -242,10 +244,14 @@ export async function getMatchesByDate(
         const cards: CardEvent[] = [];
         let homeStats: TeamStats | undefined;
         let awayStats: TeamStats | undefined;
+        let summaryOdds: FootballOdds | undefined;
 
         // Only fetch detailed summary for finished games
         if (completed) {
           const summary = await fetchSummary(league.slug, event.id);
+
+          // Extract odds from summary (ESPN keeps pre-game odds here for finished games)
+          summaryOdds = parseOdds(summary.odds) || parseOdds(summary.pickcenter);
 
           for (const ke of summary.keyEvents || []) {
             const typeText = ke.type?.text || "";
@@ -301,8 +307,8 @@ export async function getMatchesByDate(
           }
         }
 
-        // Parse odds for all game statuses (ESPN may retain odds data for finished games)
-        const odds = parseOdds(comp.odds);
+        // Parse odds: try scoreboard first, fall back to summary endpoint odds
+        const odds = parseOdds(comp.odds) || summaryOdds;
 
         matches.push({
           id: event.id,

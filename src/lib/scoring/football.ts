@@ -2,9 +2,8 @@ import { type FootballMatch, type FootballOdds, type GoalEvent } from "../api/fo
 import { clampScore, getLabel, type ExcitementResult, type EasterEgg } from "./types";
 
 const BASE_SCORE = 4.5;
-const PREDICTION_BASE_SCORE = 3.5;
 
-// ─── Post-game factor functions ─────────────────────────────────────────────
+// ─── Shared factor functions (used by both post-game and prediction) ────────
 
 function totalGoalsPoints(totalGoals: number): number {
   if (totalGoals === 0) return -1.5;
@@ -23,6 +22,56 @@ function closenessPoints(homeScore: number, awayScore: number): number {
   if (diff === 3) return -0.3;
   return -0.8; // 4+ goal blowout
 }
+
+function standingsBonus(homeRank?: number, awayRank?: number, totalTeams: number = 20): number {
+  if (homeRank == null || awayRank == null) return 0;
+
+  const top4Cutoff = Math.floor(totalTeams * 0.2);
+  const top6Cutoff = Math.floor(totalTeams * 0.3);
+  const top8Cutoff = Math.floor(totalTeams * 0.4);
+  const bottom4Cutoff = totalTeams - Math.floor(totalTeams * 0.2) + 1;
+
+  const bothTop4 = homeRank <= top4Cutoff && awayRank <= top4Cutoff;
+  const bothTop8 = homeRank <= top8Cutoff && awayRank <= top8Cutoff;
+  const bothBottom4 = homeRank >= bottom4Cutoff && awayRank >= bottom4Cutoff;
+  const oneTop4 = homeRank <= top4Cutoff || awayRank <= top4Cutoff;
+  const oneBottom4 = homeRank >= bottom4Cutoff || awayRank >= bottom4Cutoff;
+  const oneTop6 = homeRank <= top6Cutoff || awayRank <= top6Cutoff;
+
+  if (bothTop4) return 1.0;
+  if (bothBottom4) return 0.8;
+  if (bothTop8) return 0.6;
+  if (oneTop4 && oneBottom4) return 0.5;
+  if (oneTop6) return 0.3;
+  return 0;
+}
+
+function knockoutStageBonus(
+  isKnockout?: boolean,
+  knockoutRound?: string,
+  aggregateDiff?: number
+): number {
+  if (!isKnockout) return 0;
+
+  const stageBonuses: Record<string, number> = {
+    "Knockout Round Playoffs": 0.5,
+    "Rd of 16": 0.7,
+    "Quarterfinals": 0.9,
+    "Semifinals": 1.1,
+    "Final": 1.3,
+  };
+
+  let pts = stageBonuses[knockoutRound ?? ""] ?? 0.5;
+
+  // Close aggregate bonus: 2nd leg with aggregate diff <= 1
+  if (aggregateDiff != null && aggregateDiff <= 1) {
+    pts += 0.5;
+  }
+
+  return pts;
+}
+
+// ─── Post-game only factor functions ────────────────────────────────────────
 
 function lateGoalsPoints(goals: GoalEvent[]): number {
   let pts = 0;
@@ -141,50 +190,6 @@ function physicalPoints(match: FootballMatch): number {
   return -0.1;
 }
 
-function knockoutBonus(match: FootballMatch): number {
-  if (!match.isKnockout) return 0;
-
-  const stageBonuses: Record<string, number> = {
-    "Knockout Round Playoffs": 0.5,
-    "Rd of 16": 0.7,
-    "Quarterfinals": 0.9,
-    "Semifinals": 1.1,
-    "Final": 1.3,
-  };
-
-  let pts = stageBonuses[match.knockoutRound ?? ""] ?? 0.5;
-
-  // Close aggregate bonus: 2nd leg with aggregate diff <= 1
-  if (match.aggregateDiff != null && match.aggregateDiff <= 1) {
-    pts += 0.5;
-  }
-
-  return pts;
-}
-
-function standingsBonus(homeRank?: number, awayRank?: number, totalTeams: number = 20): number {
-  if (homeRank == null || awayRank == null) return 0;
-
-  const top4Cutoff = Math.floor(totalTeams * 0.2);
-  const top6Cutoff = Math.floor(totalTeams * 0.3);
-  const top8Cutoff = Math.floor(totalTeams * 0.4);
-  const bottom4Cutoff = totalTeams - Math.floor(totalTeams * 0.2) + 1;
-
-  const bothTop4 = homeRank <= top4Cutoff && awayRank <= top4Cutoff;
-  const bothTop8 = homeRank <= top8Cutoff && awayRank <= top8Cutoff;
-  const bothBottom4 = homeRank >= bottom4Cutoff && awayRank >= bottom4Cutoff;
-  const oneTop4 = homeRank <= top4Cutoff || awayRank <= top4Cutoff;
-  const oneBottom4 = homeRank >= bottom4Cutoff || awayRank >= bottom4Cutoff;
-  const oneTop6 = homeRank <= top6Cutoff || awayRank <= top6Cutoff;
-
-  if (bothTop4) return 1.0;
-  if (bothBottom4) return 0.8;
-  if (bothTop8) return 0.6;
-  if (oneTop4 && oneBottom4) return 0.5;
-  if (oneTop6) return 0.3;
-  return 0;
-}
-
 // ─── Post-game excitement calculation ───────────────────────────────────────
 
 export function calculateFootballExcitement(
@@ -215,33 +220,13 @@ export function calculateFootballExcitement(
   }
 
   points += standingsBonus(homeRank, awayRank, totalTeams);
-  points += knockoutBonus(match);
+  points += knockoutStageBonus(match.isKnockout, match.knockoutRound, match.aggregateDiff);
 
   const score = clampScore(points);
   return { score, label: getLabel(score) };
 }
 
-// ─── Pre-game prediction factor functions ───────────────────────────────────
-
-function overUnderPoints(overUnder?: number): number {
-  if (overUnder == null) return 0;
-  if (overUnder <= 1.5) return -1.5;
-  if (overUnder <= 2.0) return -0.5;
-  if (overUnder <= 2.5) return 0;
-  if (overUnder <= 3.0) return 0.8;
-  if (overUnder <= 3.5) return 1.4;
-  return 2.0; // 4.0+
-}
-
-function spreadClosenessPoints(spread?: number): number {
-  if (spread == null) return 0;
-  const abs = Math.abs(spread);
-  if (abs <= 0.5) return 1.2;
-  if (abs <= 1.0) return 0.6;
-  if (abs <= 1.5) return 0;
-  if (abs <= 2.0) return -0.5;
-  return -1.2; // 2.5+
-}
+// ─── Odds-to-prediction translation helpers ─────────────────────────────────
 
 /** Convert American moneyline to implied probability (0-1). */
 function moneylineToProb(ml: number): number {
@@ -249,12 +234,35 @@ function moneylineToProb(ml: number): number {
   return 100 / (ml + 100);
 }
 
-function moneylineBalancePoints(
+/**
+ * Translate over/under line to predicted total goals.
+ * Returns league average (2.5) when undefined.
+ */
+function oddsToExpectedGoals(overUnder?: number): number {
+  if (overUnder == null) return 2.5;
+  return overUnder;
+}
+
+/**
+ * Translate spread to predicted score margin (absolute value).
+ * Returns moderate default (1.0) when undefined.
+ */
+function oddsToExpectedMargin(spread?: number): number {
+  if (spread == null) return 1.0;
+  return Math.abs(spread);
+}
+
+/**
+ * Competitiveness bonus based on moneyline balance.
+ * Balanced odds suggest an unpredictable, competitive match (+bonus).
+ * Lopsided odds suggest a mismatch (-penalty).
+ * Range: -0.5 to +0.5
+ */
+function competitivenessBonus(
   homeMl?: number,
   awayMl?: number,
   drawMl?: number
 ): number {
-  // Need at least home and away moneyline to compute balance
   if (homeMl == null || awayMl == null) return 0;
 
   const probs: number[] = [moneylineToProb(homeMl), moneylineToProb(awayMl)];
@@ -272,29 +280,13 @@ function moneylineBalancePoints(
     normalized.reduce((sum, p) => sum + (p - mean) ** 2, 0) / normalized.length;
   const stdDev = Math.sqrt(variance);
 
-  if (stdDev <= 0.05) return 1.5;
-  if (stdDev <= 0.10) return 0.9;
-  if (stdDev <= 0.15) return 0.4;
+  // Map stdDev to a modest bonus/penalty (-0.5 to +0.5)
+  if (stdDev <= 0.05) return 0.5;   // very balanced
+  if (stdDev <= 0.10) return 0.3;
+  if (stdDev <= 0.15) return 0.1;
   if (stdDev <= 0.20) return 0;
-  if (stdDev <= 0.25) return -0.5;
-  return -1.0; // heavy favorite
-}
-
-function predictionKnockoutBonus(
-  isKnockout?: boolean,
-  knockoutRound?: string
-): number {
-  if (!isKnockout) return 0;
-
-  const stageBonuses: Record<string, number> = {
-    "Knockout Round Playoffs": 0.5,
-    "Rd of 16": 0.7,
-    "Quarterfinals": 0.9,
-    "Semifinals": 1.1,
-    "Final": 1.3,
-  };
-
-  return stageBonuses[knockoutRound ?? ""] ?? 0.5;
+  if (stdDev <= 0.25) return -0.2;
+  return -0.5;                       // heavy favorite
 }
 
 // ─── Pre-game excitement prediction ─────────────────────────────────────────
@@ -311,12 +303,34 @@ export interface PredictionInput {
 export function predictFootballExcitement(input: PredictionInput): ExcitementResult {
   const { odds, homeRank, awayRank, totalTeams, isKnockout, knockoutRound } = input;
 
-  let points = PREDICTION_BASE_SCORE;
-  points += overUnderPoints(odds.overUnder);
-  points += spreadClosenessPoints(odds.spread);
-  points += moneylineBalancePoints(odds.homeMoneyline, odds.awayMoneyline, odds.drawMoneyline);
+  // Translate odds to predicted game values
+  const expectedGoals = oddsToExpectedGoals(odds.overUnder);
+  const expectedMargin = oddsToExpectedMargin(odds.spread);
+
+  // Derive synthetic scores for closenessPoints
+  // closenessPoints only cares about Math.abs(home - away), so we construct
+  // scores where the difference equals the rounded expected margin
+  const roundedMargin = Math.round(expectedMargin);
+  const syntheticHomeScore = roundedMargin;
+  const syntheticAwayScore = 0;
+
+  let points = BASE_SCORE;
+
+  // Reuse post-game factor functions with predicted inputs
+  points += totalGoalsPoints(Math.round(expectedGoals));
+  points += closenessPoints(syntheticHomeScore, syntheticAwayScore);
+
+  // Competitiveness bonus from moneyline balance (prediction-specific)
+  points += competitivenessBonus(odds.homeMoneyline, odds.awayMoneyline, odds.drawMoneyline);
+
+  // Unpredictable factors contribute 0:
+  // lateGoalsPoints, leadChangesPoints, redCardsPoints, comebackPoints,
+  // lateEqualizerPoints, shotIntensityPoints, shotsOnTargetPoints,
+  // possessionPoints, physicalPoints -- all omitted (0 contribution)
+
+  // Shared contextual factors
   points += standingsBonus(homeRank, awayRank, totalTeams);
-  points += predictionKnockoutBonus(isKnockout, knockoutRound);
+  points += knockoutStageBonus(isKnockout, knockoutRound);
 
   const score = clampScore(points);
   return { score, label: getLabel(score), predicted: true };

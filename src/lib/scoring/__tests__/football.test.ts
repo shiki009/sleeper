@@ -399,7 +399,7 @@ describe("predictFootballExcitement", () => {
     expect(result.score).toBeLessThan(5);
   });
 
-  it("gives a high score for balanced moneylines and high over/under", () => {
+  it("gives a higher score for balanced moneylines and high over/under", () => {
     // Nearly equal three-way odds: very unpredictable
     const result = predictFootballExcitement(
       makePredictionInput({
@@ -412,7 +412,10 @@ describe("predictFootballExcitement", () => {
         }),
       })
     );
-    expect(result.score).toBeGreaterThanOrEqual(7);
+    // The aligned algorithm uses the same factor functions as post-game scoring,
+    // producing more moderate predictions. With high O/U, tight spread, and
+    // balanced moneylines this should be at least a Good Watch.
+    expect(result.score).toBeGreaterThanOrEqual(6);
   });
 
   it("adds standings bonus when both teams are top-ranked", () => {
@@ -538,7 +541,7 @@ describe("predictFootballExcitement", () => {
   });
 
   it("uses correct labels for different score ranges", () => {
-    // High prediction (balanced, exciting match)
+    // High prediction (balanced, exciting match with knockout + standings)
     const high = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({
@@ -585,12 +588,97 @@ describe("predictFootballExcitement", () => {
     const result = calculateFootballExcitement(match);
     expect(result.predicted).toBeUndefined();
   });
+
+  it("uses the same BASE_SCORE as post-game scoring", () => {
+    // With all odds at defaults that produce 0 modifiers, the prediction
+    // should be close to BASE_SCORE (4.5). O/U 2.5 -> round(2.5)=3 -> +0.5,
+    // spread 1.0 default -> round(1.0)=1 -> closeness(1,0)=0.3
+    // So base prediction with no odds should be around 4.5 + 0.5 + 0.3 = 5.3
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: {
+          overUnder: undefined,
+          spread: undefined,
+          homeMoneyline: undefined,
+          awayMoneyline: undefined,
+          drawMoneyline: undefined,
+        },
+      })
+    );
+    // With all defaults: BASE_SCORE (4.5) + totalGoalsPoints(round(2.5)=3 -> +0.5)
+    // + closenessPoints(round(1.0)=1, 0 -> +0.3) = 5.3
+    expect(result.score).toBeGreaterThanOrEqual(4);
+    expect(result.score).toBeLessThanOrEqual(6);
+  });
 });
 
-describe("predictFootballExcitement - tuned score range", () => {
-  it("produces a score below 3 for very boring matchups", () => {
-    // Low O/U, wide spread, lopsided odds -- should be a clear Skip It
-    const result = predictFootballExcitement(
+describe("predictFootballExcitement - aligned factor framework", () => {
+  it("uses totalGoalsPoints with rounded over/under", () => {
+    // O/U 0.5 -> round to 1 -> totalGoalsPoints(1) = -0.5
+    const lowGoals = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: 0.5 }),
+      })
+    );
+    // O/U 4.5 -> round to 5 -> totalGoalsPoints(5) = +1.2
+    const highGoals = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: 4.5 }),
+      })
+    );
+    // Difference should reflect totalGoalsPoints range: -0.5 to +1.2 = 1.7
+    expect(highGoals.score).toBeGreaterThan(lowGoals.score);
+    expect(highGoals.score - lowGoals.score).toBeGreaterThanOrEqual(1.5);
+  });
+
+  it("uses closenessPoints with rounded spread as margin", () => {
+    // Spread 0 -> round to 0 -> closenessPoints(0, 0) = +0.5 (draw)
+    const draw = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 0 }),
+      })
+    );
+    // Spread 4.0 -> round to 4 -> closenessPoints(4, 0) = -0.8 (blowout)
+    const blowout = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: 4.0 }),
+      })
+    );
+    // Difference should reflect closenessPoints range: +0.5 to -0.8 = 1.3
+    expect(draw.score).toBeGreaterThan(blowout.score);
+    expect(draw.score - blowout.score).toBeGreaterThanOrEqual(1.0);
+  });
+
+  it("competitiveness bonus has modest impact from moneylines", () => {
+    // Perfectly balanced odds -> competitiveness bonus ~+0.5
+    const balanced = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          homeMoneyline: +200,
+          awayMoneyline: +200,
+          drawMoneyline: +200,
+        }),
+      })
+    );
+    // Heavy favorite -> competitiveness bonus ~-0.5
+    const lopsided = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          homeMoneyline: -1000,
+          awayMoneyline: +2000,
+          drawMoneyline: +1500,
+        }),
+      })
+    );
+    // Total competitiveness range is about 1.0 (-0.5 to +0.5)
+    expect(balanced.score).toBeGreaterThan(lopsided.score);
+    expect(balanced.score - lopsided.score).toBeGreaterThanOrEqual(0.5);
+    expect(balanced.score - lopsided.score).toBeLessThanOrEqual(1.5);
+  });
+
+  it("prediction scores are structurally comparable to post-game scores", () => {
+    // A "boring" prediction should be close to a boring actual game score
+    const boringPrediction = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({
           overUnder: 1.5,
@@ -601,17 +689,19 @@ describe("predictFootballExcitement - tuned score range", () => {
         }),
       })
     );
-    expect(result.score).toBeLessThan(3);
-    expect(result.label).toBe("Skip It");
-  });
+    const boringActual = calculateFootballExcitement(
+      makeMatch({ homeScore: 0, awayScore: 0, goals: [] })
+    );
+    // Both should be in the low range (Skip It / Fair Game)
+    expect(boringPrediction.score).toBeLessThan(5);
+    expect(boringActual.score).toBeLessThan(5);
 
-  it("produces a score above 8 for very exciting matchups without knockout bonus", () => {
-    // High O/U, tight spread, balanced odds, top standings
-    const result = predictFootballExcitement(
+    // An "exciting" prediction should be close to an exciting actual game score
+    const excitingPrediction = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({
           overUnder: 4.0,
-          spread: 0.5,
+          spread: 0,
           homeMoneyline: +200,
           awayMoneyline: +200,
           drawMoneyline: +200,
@@ -619,30 +709,15 @@ describe("predictFootballExcitement - tuned score range", () => {
         homeRank: 1,
         awayRank: 2,
         totalTeams: 20,
+        isKnockout: true,
+        knockoutRound: "Final",
       })
     );
-    expect(result.score).toBeGreaterThanOrEqual(8);
-    expect(result.label).toBe("Must Watch");
+    // Both should be in the high range
+    expect(excitingPrediction.score).toBeGreaterThanOrEqual(7);
   });
 
-  it("produces a mid-range score (4-6) for average matchups", () => {
-    // Average O/U (2.5), moderate spread (1.5), no standings
-    const result = predictFootballExcitement(
-      makePredictionInput({
-        odds: makeOdds({
-          overUnder: 2.5,
-          spread: 1.5,
-          homeMoneyline: -150,
-          awayMoneyline: +300,
-          drawMoneyline: +280,
-        }),
-      })
-    );
-    expect(result.score).toBeGreaterThanOrEqual(3);
-    expect(result.score).toBeLessThanOrEqual(6);
-  });
-
-  it("has at least 5 points spread between boring and exciting predictions", () => {
+  it("produces meaningful spread between boring and exciting predictions", () => {
     const boring = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({
@@ -668,26 +743,29 @@ describe("predictFootballExcitement - tuned score range", () => {
         totalTeams: 20,
       })
     );
-    expect(exciting.score - boring.score).toBeGreaterThanOrEqual(5);
+    // The aligned algorithm uses the same modest factor ranges as post-game,
+    // so the spread is narrower than the old algorithm but still meaningful
+    expect(exciting.score - boring.score).toBeGreaterThanOrEqual(3);
   });
 
-  it("over/under is the strongest single prediction factor", () => {
-    // Same odds except O/U varies
+  it("over/under affects prediction through totalGoalsPoints", () => {
+    // O/U 1.5 -> round(1.5)=2 -> totalGoalsPoints(2)=0
     const lowOU = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({ overUnder: 1.5 }),
       })
     );
+    // O/U 4.0 -> round(4.0)=4 -> totalGoalsPoints(4)=0.8
     const highOU = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({ overUnder: 4.0 }),
       })
     );
-    // O/U range is [-1.5, +2.0] = 3.5 total -- should produce significant difference
-    expect(highOU.score - lowOU.score).toBeGreaterThanOrEqual(3);
+    // Difference is 0.8 from totalGoalsPoints
+    expect(highOU.score - lowOU.score).toBeGreaterThanOrEqual(0.5);
   });
 
-  it("spread closeness has meaningful impact", () => {
+  it("spread affects prediction through closenessPoints", () => {
     const tight = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({ spread: 0.5 }),
@@ -698,32 +776,65 @@ describe("predictFootballExcitement - tuned score range", () => {
         odds: makeOdds({ spread: 3.0 }),
       })
     );
-    // Spread range is [-1.2, +1.2] = 2.4 total
-    expect(tight.score - wide.score).toBeGreaterThanOrEqual(2);
+    // Spread 0.5 -> round to 1 -> closenessPoints(1,0)=0.3
+    // Spread 3.0 -> round to 3 -> closenessPoints(3,0)=-0.3
+    // Difference = 0.6
+    expect(tight.score - wide.score).toBeGreaterThanOrEqual(0.5);
   });
 
-  it("moneyline balance has meaningful impact", () => {
-    // Perfectly balanced odds
-    const balanced = predictFootballExcitement(
+  it("produces a low score for boring matchups", () => {
+    // Low O/U, wide spread, lopsided odds
+    const result = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({
+          overUnder: 1.5,
+          spread: 3.0,
+          homeMoneyline: -500,
+          awayMoneyline: +1000,
+          drawMoneyline: +500,
+        }),
+      })
+    );
+    // Should be below average (Fair Game or Skip It)
+    expect(result.score).toBeLessThan(4.5);
+  });
+
+  it("produces a high score for exciting matchups with knockout + standings", () => {
+    // High O/U, tight spread, balanced odds, top standings, knockout final
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 4.0,
+          spread: 0,
           homeMoneyline: +200,
           awayMoneyline: +200,
           drawMoneyline: +200,
         }),
+        homeRank: 1,
+        awayRank: 2,
+        totalTeams: 20,
+        isKnockout: true,
+        knockoutRound: "Final",
       })
     );
-    // Heavy favorite
-    const lopsided = predictFootballExcitement(
+    expect(result.score).toBeGreaterThanOrEqual(8);
+    expect(result.label).toBe("Must Watch");
+  });
+
+  it("produces a mid-range score for average matchups", () => {
+    // Average O/U (2.5), moderate spread (1.5), no standings
+    const result = predictFootballExcitement(
       makePredictionInput({
         odds: makeOdds({
-          homeMoneyline: -1000,
-          awayMoneyline: +2000,
-          drawMoneyline: +1500,
+          overUnder: 2.5,
+          spread: 1.5,
+          homeMoneyline: -150,
+          awayMoneyline: +300,
+          drawMoneyline: +280,
         }),
       })
     );
-    // Moneyline range is [-1.0, +1.5] = 2.5 total
-    expect(balanced.score - lopsided.score).toBeGreaterThanOrEqual(2);
+    expect(result.score).toBeGreaterThanOrEqual(3);
+    expect(result.score).toBeLessThanOrEqual(6);
   });
 });
