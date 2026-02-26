@@ -1,6 +1,7 @@
 export interface ExcitementResult {
   score: number; // 1-10
   label: string;
+  predicted?: boolean; // true when score is a pre-game prediction
 }
 
 export interface EasterEgg {

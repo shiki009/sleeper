@@ -1,6 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { calculateFootballExcitement, detectFootballEasterEggs } from "../football";
-import type { FootballMatch, GoalEvent, CardEvent, TeamStats } from "../../api/football-data";
+import {
+  calculateFootballExcitement,
+  detectFootballEasterEggs,
+  predictFootballExcitement,
+} from "../football";
+import type {
+  FootballMatch,
+  FootballOdds,
+  GoalEvent,
+  CardEvent,
+  TeamStats,
+} from "../../api/football-data";
+import type { PredictionInput } from "../football";
 
 function makeMatch(overrides: Partial<FootballMatch> = {}): FootballMatch {
   return {
@@ -26,6 +37,26 @@ function makeStats(overrides: Partial<TeamStats> = {}): TeamStats {
     foulsCommitted: 10,
     wonCorners: 5,
     saves: 3,
+    ...overrides,
+  };
+}
+
+function makeOdds(overrides: Partial<FootballOdds> = {}): FootballOdds {
+  return {
+    overUnder: 2.5,
+    spread: 0.5,
+    homeMoneyline: -110,
+    awayMoneyline: +200,
+    drawMoneyline: +250,
+    ...overrides,
+  };
+}
+
+function makePredictionInput(
+  overrides: Partial<PredictionInput> = {}
+): PredictionInput {
+  return {
+    odds: makeOdds(),
     ...overrides,
   };
 }
@@ -327,5 +358,231 @@ describe("detectFootballEasterEggs", () => {
     });
     const eggs = detectFootballEasterEggs(match);
     expect(eggs.find((e) => e.id === "cardiac")).toBeTruthy();
+  });
+});
+
+describe("predictFootballExcitement", () => {
+  it("returns a result with predicted: true", () => {
+    const result = predictFootballExcitement(makePredictionInput());
+    expect(result.predicted).toBe(true);
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(typeof result.label).toBe("string");
+  });
+
+  it("gives a higher score for high over/under and tight spread", () => {
+    const exciting = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: 4.0, spread: 0.5 }),
+      })
+    );
+    const boring = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: 1.5, spread: 3.0 }),
+      })
+    );
+    expect(exciting.score).toBeGreaterThan(boring.score);
+  });
+
+  it("gives a low score for low over/under and wide spread", () => {
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 1.5,
+          spread: 3.0,
+          homeMoneyline: -500,
+          awayMoneyline: +1000,
+          drawMoneyline: +500,
+        }),
+      })
+    );
+    expect(result.score).toBeLessThan(5);
+  });
+
+  it("gives a high score for balanced moneylines and high over/under", () => {
+    // Nearly equal three-way odds: very unpredictable
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 3.5,
+          spread: 0.5,
+          homeMoneyline: +200,
+          awayMoneyline: +200,
+          drawMoneyline: +200,
+        }),
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(7);
+  });
+
+  it("adds standings bonus when both teams are top-ranked", () => {
+    const withoutStandings = predictFootballExcitement(
+      makePredictionInput({ odds: makeOdds() })
+    );
+    const withStandings = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds(),
+        homeRank: 1,
+        awayRank: 2,
+        totalTeams: 20,
+      })
+    );
+    expect(withStandings.score).toBeGreaterThan(withoutStandings.score);
+  });
+
+  it("adds knockout bonus for knockout stage games", () => {
+    const leaguePhase = predictFootballExcitement(
+      makePredictionInput({ odds: makeOdds() })
+    );
+    const knockout = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds(),
+        isKnockout: true,
+        knockoutRound: "Final",
+      })
+    );
+    expect(knockout.score).toBeGreaterThan(leaguePhase.score);
+  });
+
+  it("handles missing over/under gracefully", () => {
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ overUnder: undefined }),
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(result.predicted).toBe(true);
+  });
+
+  it("handles missing spread gracefully", () => {
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({ spread: undefined }),
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(result.predicted).toBe(true);
+  });
+
+  it("handles missing moneyline data gracefully", () => {
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          homeMoneyline: undefined,
+          awayMoneyline: undefined,
+          drawMoneyline: undefined,
+        }),
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(result.predicted).toBe(true);
+  });
+
+  it("handles odds with only over/under", () => {
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: {
+          overUnder: 3.5,
+          spread: undefined,
+          homeMoneyline: undefined,
+          awayMoneyline: undefined,
+          drawMoneyline: undefined,
+        },
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(result.predicted).toBe(true);
+  });
+
+  it("clamps extreme high scores to 10", () => {
+    // Maximal everything: high O/U, tight spread, balanced odds, top teams, final
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 5.0,
+          spread: 0,
+          homeMoneyline: +200,
+          awayMoneyline: +200,
+          drawMoneyline: +200,
+        }),
+        homeRank: 1,
+        awayRank: 2,
+        totalTeams: 20,
+        isKnockout: true,
+        knockoutRound: "Final",
+      })
+    );
+    expect(result.score).toBeLessThanOrEqual(10);
+    expect(result.score).toBeGreaterThanOrEqual(1);
+  });
+
+  it("clamps extreme low scores to 1", () => {
+    // Minimal everything: low O/U, wide spread, lopsided odds
+    const result = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 1.0,
+          spread: 4.0,
+          homeMoneyline: -1000,
+          awayMoneyline: +2000,
+          drawMoneyline: +1500,
+        }),
+      })
+    );
+    expect(result.score).toBeGreaterThanOrEqual(1);
+    expect(result.score).toBeLessThanOrEqual(10);
+  });
+
+  it("uses correct labels for different score ranges", () => {
+    // High prediction (balanced, exciting match)
+    const high = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 4.0,
+          spread: 0,
+          homeMoneyline: +200,
+          awayMoneyline: +200,
+          drawMoneyline: +200,
+        }),
+        homeRank: 1,
+        awayRank: 2,
+        totalTeams: 20,
+        isKnockout: true,
+        knockoutRound: "Semifinals",
+      })
+    );
+    expect(high.label).toBe("Must Watch");
+
+    // Low prediction (boring match)
+    const low = predictFootballExcitement(
+      makePredictionInput({
+        odds: makeOdds({
+          overUnder: 1.5,
+          spread: 3.0,
+          homeMoneyline: -500,
+          awayMoneyline: +1000,
+          drawMoneyline: +500,
+        }),
+      })
+    );
+    expect(["Skip It", "Fair Game"]).toContain(low.label);
+  });
+
+  it("does not set predicted flag on post-game calculateFootballExcitement", () => {
+    const match = makeMatch({
+      homeScore: 2,
+      awayScore: 1,
+      goals: [
+        { minute: 30, teamId: "home" },
+        { minute: 60, teamId: "home" },
+        { minute: 80, teamId: "away" },
+      ],
+    });
+    const result = calculateFootballExcitement(match);
+    expect(result.predicted).toBeUndefined();
   });
 });
