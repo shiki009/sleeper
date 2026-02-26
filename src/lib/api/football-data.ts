@@ -292,8 +292,8 @@ export async function getMatchesByDate(
           }
         }
 
-        // Parse odds for scheduled games
-        const odds = status === "SCHEDULED" ? parseOdds(comp.odds) : undefined;
+        // Parse odds for all game statuses (ESPN may retain odds data for finished games)
+        const odds = parseOdds(comp.odds);
 
         matches.push({
           id: event.id,

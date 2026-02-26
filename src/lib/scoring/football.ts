@@ -2,7 +2,7 @@ import { type FootballMatch, type FootballOdds, type GoalEvent } from "../api/fo
 import { clampScore, getLabel, type ExcitementResult, type EasterEgg } from "./types";
 
 const BASE_SCORE = 4.5;
-const PREDICTION_BASE_SCORE = 4.5;
+const PREDICTION_BASE_SCORE = 3.5;
 
 // ─── Post-game factor functions ─────────────────────────────────────────────
 
@@ -225,22 +225,22 @@ export function calculateFootballExcitement(
 
 function overUnderPoints(overUnder?: number): number {
   if (overUnder == null) return 0;
-  if (overUnder <= 1.5) return -1.0;
-  if (overUnder <= 2.0) return -0.3;
+  if (overUnder <= 1.5) return -1.5;
+  if (overUnder <= 2.0) return -0.5;
   if (overUnder <= 2.5) return 0;
-  if (overUnder <= 3.0) return 0.4;
-  if (overUnder <= 3.5) return 0.8;
-  return 1.2; // 4.0+
+  if (overUnder <= 3.0) return 0.8;
+  if (overUnder <= 3.5) return 1.4;
+  return 2.0; // 4.0+
 }
 
 function spreadClosenessPoints(spread?: number): number {
   if (spread == null) return 0;
   const abs = Math.abs(spread);
-  if (abs <= 0.5) return 0.8;
-  if (abs <= 1.0) return 0.4;
+  if (abs <= 0.5) return 1.2;
+  if (abs <= 1.0) return 0.6;
   if (abs <= 1.5) return 0;
-  if (abs <= 2.0) return -0.3;
-  return -0.8; // 2.5+
+  if (abs <= 2.0) return -0.5;
+  return -1.2; // 2.5+
 }
 
 /** Convert American moneyline to implied probability (0-1). */
@@ -272,12 +272,12 @@ function moneylineBalancePoints(
     normalized.reduce((sum, p) => sum + (p - mean) ** 2, 0) / normalized.length;
   const stdDev = Math.sqrt(variance);
 
-  if (stdDev <= 0.05) return 1.0;
-  if (stdDev <= 0.10) return 0.6;
-  if (stdDev <= 0.15) return 0.3;
+  if (stdDev <= 0.05) return 1.5;
+  if (stdDev <= 0.10) return 0.9;
+  if (stdDev <= 0.15) return 0.4;
   if (stdDev <= 0.20) return 0;
-  if (stdDev <= 0.25) return -0.3;
-  return -0.5; // heavy favorite
+  if (stdDev <= 0.25) return -0.5;
+  return -1.0; // heavy favorite
 }
 
 function predictionKnockoutBonus(
