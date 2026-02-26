@@ -119,20 +119,29 @@ function parseStat(
 }
 
 async function fetchSummary(eventId: string): Promise<SummaryResponse> {
-  const res = await fetch(`${ESPN_BASE}/summary?event=${eventId}`, {
-    next: { revalidate: 86400 },
-  });
-  if (!res.ok) return {};
-  return res.json();
+  try {
+    const res = await fetch(`${ESPN_BASE}/summary?event=${eventId}`, {
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return {};
+    return await res.json();
+  } catch {
+    return {};
+  }
 }
 
 export async function getGamesByDate(date: string): Promise<NhlGameData[]> {
   const espnDate = formatDate(date);
-  const res = await fetch(`${ESPN_BASE}/scoreboard?dates=${espnDate}`, {
-    next: { revalidate: 300 },
-  });
-  if (!res.ok) return [];
-  const data: ScoreboardResponse = await res.json();
+  let data: ScoreboardResponse;
+  try {
+    const res = await fetch(`${ESPN_BASE}/scoreboard?dates=${espnDate}`, {
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return [];
+    data = await res.json();
+  } catch {
+    return [];
+  }
 
   const games: NhlGameData[] = [];
 

@@ -198,12 +198,16 @@ async function fetchSummary(
   league: string,
   eventId: string
 ): Promise<SummaryResponse> {
-  const res = await fetch(
-    `${ESPN_BASE}/${league}/summary?event=${eventId}`,
-    { next: { revalidate: 86400 } }
-  );
-  if (!res.ok) return {};
-  return res.json();
+  try {
+    const res = await fetch(
+      `${ESPN_BASE}/${league}/summary?event=${eventId}`,
+      { next: { revalidate: 86400 } }
+    );
+    if (!res.ok) return {};
+    return await res.json();
+  } catch {
+    return {};
+  }
 }
 
 export async function getMatchesByDate(
@@ -213,12 +217,17 @@ export async function getMatchesByDate(
 
   const results = await Promise.allSettled(
     LEAGUES.map(async (league) => {
-      const res = await fetch(
-        `${ESPN_BASE}/${league.slug}/scoreboard?dates=${espnDate}`,
-        { next: { revalidate: 300 } }
-      );
-      if (!res.ok) return [];
-      const data: ScoreboardResponse = await res.json();
+      let data: ScoreboardResponse;
+      try {
+        const res = await fetch(
+          `${ESPN_BASE}/${league.slug}/scoreboard?dates=${espnDate}`,
+          { next: { revalidate: 300 } }
+        );
+        if (!res.ok) return [];
+        data = await res.json();
+      } catch {
+        return [];
+      }
 
       const matches: FootballMatch[] = [];
 
