@@ -37,3 +37,6 @@ next-env.d.ts
 
 # file cache
 /.cache/
+
+# agent planning artifacts
+.planning/
