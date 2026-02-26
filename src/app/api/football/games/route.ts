@@ -11,6 +11,8 @@ const COMPETITION_TO_SLUG: Record<string, string> = {
   "Serie A": "ita.1",
   "Ligue 1": "fra.1",
   "Champions League": "uefa.champions",
+  "Europa League": "uefa.europa",
+  "Conference League": "uefa.europa.conf",
 };
 
 function mapStatus(status: string): "finished" | "in_progress" | "scheduled" {
