@@ -22,7 +22,7 @@ export function calculateQualifyingExcitement(
   standings?: Map<string, number>
 ): ExcitementResult {
   if (qualResults.length === 0) {
-    return { score: BASE_SCORE, label: getLabel(BASE_SCORE) };
+    return { score: BASE_SCORE, label: getLabel(BASE_SCORE, "f1") };
   }
 
   let points = BASE_SCORE;
@@ -69,7 +69,7 @@ export function calculateQualifyingExcitement(
   }
 
   const score = clampScore(points);
-  return { score, label: getLabel(score) };
+  return { score, label: getLabel(score, "f1") };
 }
 
 export function detectQualifyingEasterEggs(
@@ -99,6 +99,17 @@ export function detectQualifyingEasterEggs(
       tooltip: "5 different teams in the top 5",
     });
   }
+
+  // Grid positions — top 10 results behind the reveal button
+  const top10 = qualResults.slice(0, 10);
+  top10.forEach((driver, i) => {
+    const teamLabel = driver.team ? ` (${driver.team})` : "";
+    eggs.push({
+      id: `grid-p${i + 1}`,
+      emoji: `P${i + 1}`,
+      label: `${driver.name}${teamLabel}`,
+    });
+  });
 
   return eggs;
 }
@@ -199,7 +210,7 @@ export function calculateRaceExcitement(
   points += teamDiversityPoints(raceResults);
 
   const score = clampScore(points);
-  return { score, label: getLabel(score) };
+  return { score, label: getLabel(score, "f1") };
 }
 
 export function detectRaceEasterEggs(event: F1EventData): EasterEgg[] {
@@ -268,6 +279,17 @@ export function detectRaceEasterEggs(event: F1EventData): EasterEgg[] {
     });
   }
 
+  // Race results — top 10 positions behind the reveal button
+  const top10 = raceResults.slice(0, 10);
+  top10.forEach((driver, i) => {
+    const teamLabel = driver.team ? ` (${driver.team})` : "";
+    eggs.push({
+      id: `result-p${i + 1}`,
+      emoji: `P${i + 1}`,
+      label: `${driver.name}${teamLabel}`,
+    });
+  });
+
   return eggs;
 }
 
@@ -317,5 +339,5 @@ export function predictRaceExcitement(opts: {
   }
 
   const score = clampScore(points);
-  return { score, label: getLabel(score), predicted: true };
+  return { score, label: getLabel(score, "f1"), predicted: true };
 }

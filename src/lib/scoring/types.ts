@@ -25,10 +25,10 @@ export interface GameSummary {
   date: string; // ISO date string
 }
 
-export function getLabel(score: number): string {
+export function getLabel(score: number, sport?: string): string {
   if (score >= 8) return "Must Watch";
   if (score >= 6) return "Good Watch";
-  if (score >= 4) return "Fair Game";
+  if (score >= 4) return sport === "f1" ? "Fair Race" : "Fair Game";
   return "Skip It";
 }
 

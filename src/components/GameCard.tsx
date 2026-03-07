@@ -182,7 +182,7 @@ export function GameCard({ game }: GameCardProps) {
               className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             >
               {revealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              <span>{revealed ? "Hide easter eggs" : "Reveal easter eggs"}</span>
+              <span>{revealed ? (game.sport === "f1" ? "Hide results" : "Hide easter eggs") : (game.sport === "f1" ? "Reveal results" : "Reveal easter eggs")}</span>
             </button>
             <div
               className={`grid transition-all duration-300 ease-in-out ${

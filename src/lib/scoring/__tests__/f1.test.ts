@@ -127,13 +127,18 @@ describe("detectQualifyingEasterEggs", () => {
     expect(eggs.some((e) => e.id === "mixed-grid")).toBe(true);
   });
 
-  it("returns empty for normal qualifying", () => {
+  it("includes grid positions for normal qualifying", () => {
     const results = [
       makeDriver("A", "McLaren"),
       makeDriver("B", "McLaren"),
     ];
     const eggs = detectQualifyingEasterEggs(results);
-    expect(eggs).toEqual([]);
+    // No special eggs, just grid positions
+    expect(eggs.some((e) => e.id === "shock-pole")).toBe(false);
+    expect(eggs.some((e) => e.id === "mixed-grid")).toBe(false);
+    // Grid positions are included
+    expect(eggs.some((e) => e.id === "grid-p1")).toBe(true);
+    expect(eggs.some((e) => e.id === "grid-p2")).toBe(true);
   });
 });
 
