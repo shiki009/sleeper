@@ -223,7 +223,7 @@ export async function getMatchesByDate(
       try {
         const res = await fetch(
           `${ESPN_BASE}/${league.slug}/scoreboard?dates=${espnDate}`,
-          { next: { revalidate: 300 } }
+          { next: { revalidate: 60 } }
         );
         if (!res.ok) return [];
         data = await res.json();

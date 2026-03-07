@@ -174,7 +174,7 @@ export async function getGamesByDate(date: string): Promise<NbaGameData[]> {
   let data: ScoreboardResponse;
   try {
     const res = await fetch(`${ESPN_BASE}/scoreboard?dates=${espnDate}`, {
-      next: { revalidate: 300 },
+      next: { revalidate: 60 },
     });
     if (!res.ok) return [];
     data = await res.json();

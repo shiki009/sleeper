@@ -69,11 +69,14 @@ export async function GET(request: NextRequest) {
       (a, b) => (b.excitement?.score ?? -1) - (a.excitement?.score ?? -1)
     );
 
+    const allFinished = games.length > 0 && games.every((g) => g.status === "finished");
+    const maxAge = allFinished ? 3600 : 60;
+
     return NextResponse.json(
       { games, date },
       {
         headers: {
-          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=60",
+          "Cache-Control": `public, s-maxage=${maxAge}, stale-while-revalidate=60`,
         },
       }
     );
