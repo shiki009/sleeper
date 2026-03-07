@@ -6,15 +6,15 @@ const ESPN_CORE =
 
 interface EspnCompetitor {
   id: string;
-  order: number;
-  winner: boolean;
+  order?: number;
+  winner?: boolean;
   athlete: {
     fullName: string;
     displayName: string;
     shortName: string;
     flag?: { href: string; alt: string };
   };
-  statistics: unknown[];
+  statistics?: unknown[];
 }
 
 interface EspnCompetition {
@@ -69,7 +69,7 @@ export interface F1EventData {
   circuit: string;
   date: string;
   endDate: string;
-  status: string;
+  status: string; // uses the RACE competition status, not the event status
   qualifyingResults: F1Driver[];
   raceResults: F1Driver[];
 }
@@ -101,13 +101,22 @@ async function fetchTeamInfo(
   return map;
 }
 
+/**
+ * Parse competitors into F1Driver[], but only when they have an `order` field.
+ * Competitors without `order` are just entry lists (race hasn't happened).
+ */
 function parseCompetitors(
   competitors: EspnCompetitor[] | undefined,
   teamInfo?: Map<string, { team: string; color: string }>
 ): F1Driver[] {
   if (!competitors) return [];
+
+  // If competitors don't have `order`, the session hasn't produced results yet
+  const hasOrder = competitors.some((c) => c.order != null);
+  if (!hasOrder) return [];
+
   return [...competitors]
-    .sort((a, b) => a.order - b.order)
+    .sort((a, b) => (a.order ?? 99) - (b.order ?? 99))
     .map((c) => {
       const info = teamInfo?.get(c.id);
       return {
@@ -143,11 +152,15 @@ export async function getEventsByDate(date: string): Promise<F1EventData[]> {
     );
     if (!raceComp) continue;
 
-    const isFinished = event.status.type.completed;
+    // Use the RACE competition's own status, not the event-level status.
+    // The event status reflects the latest completed session (e.g. qualifying),
+    // while the race may still be scheduled.
+    const raceStatus = raceComp.status?.type.name ?? event.status.type.name;
+    const raceFinished = raceComp.status?.type.completed ?? event.status.type.completed;
 
     // Fetch team info from core API for finished races
     let teamInfo: Map<string, { team: string; color: string }> | undefined;
-    if (isFinished && raceComp.competitors && raceComp.competitors.length > 0) {
+    if (raceFinished) {
       teamInfo = await fetchTeamInfo(event.id, raceComp.id);
     }
 
@@ -164,7 +177,7 @@ export async function getEventsByDate(date: string): Promise<F1EventData[]> {
       circuit,
       date: event.date,
       endDate: event.endDate,
-      status: event.status.type.name,
+      status: raceStatus,
       qualifyingResults,
       raceResults,
     });

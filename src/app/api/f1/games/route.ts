@@ -36,8 +36,10 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      const p1 = event.raceResults[0]?.name ?? "TBD";
-      const p2 = event.raceResults[1]?.name ?? "TBD";
+      // Only show driver names when the race has actually finished with results
+      const hasRaceResults = isFinished && event.raceResults.length >= 2;
+      const p1 = hasRaceResults ? event.raceResults[0].name : event.circuit || event.name;
+      const p2 = hasRaceResults ? event.raceResults[1].name : "Race Weekend";
 
       const status = isFinished
         ? ("finished" as const)
