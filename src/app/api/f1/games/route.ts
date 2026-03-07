@@ -36,10 +36,22 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      // Only show driver names when the race has actually finished with results
+      // Show P1/P2 from race results when finished, or from qualifying when available
       const hasRaceResults = isFinished && event.raceResults.length >= 2;
-      const p1 = hasRaceResults ? event.raceResults[0].name : event.circuit || event.name;
-      const p2 = hasRaceResults ? event.raceResults[1].name : "Race Weekend";
+      const hasQualResults = event.qualifyingResults.length >= 2;
+
+      let p1: string;
+      let p2: string;
+      if (hasRaceResults) {
+        p1 = event.raceResults[0].name;
+        p2 = event.raceResults[1].name;
+      } else if (hasQualResults) {
+        p1 = `Pole: ${event.qualifyingResults[0].name}`;
+        p2 = `P2: ${event.qualifyingResults[1].name}`;
+      } else {
+        p1 = event.circuit || event.name;
+        p2 = "Race Weekend";
+      }
 
       const status = isFinished
         ? ("finished" as const)

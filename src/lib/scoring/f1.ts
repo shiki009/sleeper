@@ -217,23 +217,46 @@ export function predictF1Excitement(opts: {
 }): ExcitementResult {
   let points = BASE_SCORE;
 
-  // Championship closeness
+  // Championship closeness — having standings means there's a title fight to follow
   if (opts.standings && opts.standings.size >= 2) {
-    const ranks = Array.from(opts.standings.values()).sort((a, b) => a - b);
-    // If standings are tight, races are more meaningful
-    if (ranks.length >= 2) points += 0.5;
+    points += 0.5;
   }
 
-  // If qualifying has happened, check how tight it is
   if (opts.qualifyingResults && opts.qualifyingResults.length > 0) {
-    // Diverse teams at the front of qualifying = potentially exciting race
+    // Diverse teams at the front = more likely competitive race
     const top5Teams = opts.qualifyingResults
       .slice(0, 5)
       .map((d) => d.team)
       .filter(Boolean);
     const uniqueTeams = new Set(top5Teams).size;
-    if (uniqueTeams >= 4) points += 0.5;
-    if (uniqueTeams >= 3) points += 0.3;
+    if (uniqueTeams >= 5) points += 1.0;
+    else if (uniqueTeams >= 4) points += 0.7;
+    else if (uniqueTeams >= 3) points += 0.4;
+    else if (uniqueTeams <= 1) points -= 0.3; // one team dominating
+
+    // Championship contenders on the front row = spicy
+    if (opts.standings) {
+      const pole = opts.qualifyingResults[0];
+      const p2 = opts.qualifyingResults[1];
+      const poleRank = opts.standings.get(pole.name);
+      const p2Rank = opts.standings.get(p2.name);
+
+      if (poleRank != null && p2Rank != null && poleRank <= 3 && p2Rank <= 3) {
+        points += 0.8; // title rivals starting 1-2
+      } else if (poleRank != null && poleRank <= 3 && p2Rank != null && p2Rank <= 5) {
+        points += 0.5;
+      }
+
+      // Championship leader not on pole = could produce drama
+      const leaderOnPole = poleRank === 1;
+      if (!leaderOnPole && poleRank != null) points += 0.3;
+    }
+
+    // Non-top-team on front row = potential surprise
+    const poleTeam = opts.qualifyingResults[0]?.team;
+    if (poleTeam && !TOP_TEAMS.has(poleTeam)) {
+      points += 0.8;
+    }
   }
 
   const score = clampScore(points);
