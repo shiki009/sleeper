@@ -5,7 +5,7 @@ import { GameCard } from "./GameCard";
 import { type GameSummary } from "@/lib/scoring/types";
 
 interface GameListProps {
-  sport: "football" | "nba" | "nhl" | "all";
+  sport: "football" | "nba" | "nhl" | "f1" | "all";
   date: string;
 }
 
@@ -152,7 +152,7 @@ export function GameList({ sport, date }: GameListProps) {
 
     async function fetchGames() {
       const sports =
-        sport === "all" ? ["football", "nba", "nhl"] : [sport];
+        sport === "all" ? ["football", "nba", "nhl", "f1"] : [sport];
 
       // Fetch both the selected date AND the previous day (ESPN date),
       // then filter to games whose local start time falls on the selected date.

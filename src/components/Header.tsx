@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "/football", label: "Football" },
   { href: "/nba", label: "NBA" },
   { href: "/nhl", label: "NHL" },
+  { href: "/f1", label: "F1" },
 ];
 
 export function Header() {

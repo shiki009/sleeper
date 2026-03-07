@@ -22,7 +22,8 @@ function HomeContent() {
     | "all"
     | "football"
     | "nba"
-    | "nhl";
+    | "nhl"
+    | "f1";
   const date = searchParams.get("date") || getDefaultDate();
 
   const updateParams = useCallback(

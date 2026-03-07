@@ -12,6 +12,7 @@ const SPORTS = [
   { value: "football", label: "Football" },
   { value: "nba", label: "NBA" },
   { value: "nhl", label: "NHL" },
+  { value: "f1", label: "F1" },
 ];
 
 export function SportFilter({ value, onChange }: SportFilterProps) {

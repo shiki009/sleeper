@@ -16,7 +16,7 @@ export interface GameSummary {
   homeTeam: string;
   awayTeam: string;
   competition: string;
-  sport: "football" | "nba" | "nhl";
+  sport: "football" | "nba" | "nhl" | "f1";
   status: "finished" | "in_progress" | "scheduled";
   clock?: string;
   excitement?: ExcitementResult;

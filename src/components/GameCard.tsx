@@ -31,6 +31,8 @@ function getSportLabel(sport: string): string {
       return "NBA";
     case "nhl":
       return "NHL";
+    case "f1":
+      return "F1";
     default:
       return "";
   }

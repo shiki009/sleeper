@@ -228,7 +228,7 @@ const FOOTBALL_LOGOS: Record<string, string> = {
 };
 
 export function getTeamLogo(
-  sport: "football" | "nba" | "nhl",
+  sport: "football" | "nba" | "nhl" | "f1",
   teamName: string,
 ): string | undefined {
   switch (sport) {
@@ -238,5 +238,7 @@ export function getTeamLogo(
       return NHL_LOGOS[teamName];
     case "football":
       return FOOTBALL_LOGOS[teamName];
+    case "f1":
+      return undefined; // F1 uses driver names, no team logos
   }
 }

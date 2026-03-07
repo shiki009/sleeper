@@ -56,3 +56,32 @@ export async function getNhlStandings(): Promise<Map<string, number>> {
     `${ESPN_STANDINGS_BASE}/hockey/nhl/standings`
   );
 }
+
+export async function getF1Standings(): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  try {
+    const res = await fetch(
+      "https://site.web.api.espn.com/apis/v2/sports/racing/f1/standings",
+      { next: { revalidate: 3600 } }
+    );
+    if (!res.ok) return map;
+    const data = await res.json();
+
+    for (const group of data.children ?? []) {
+      if (group.name !== "Driver Standings") continue;
+      for (const entry of group.standings?.entries ?? []) {
+        const name = entry.athlete?.displayName ?? entry.athlete?.name;
+        const rankStat = entry.stats?.find(
+          (s: { name: string }) => s.name === "rank"
+        );
+        const rank = rankStat ? parseInt(rankStat.displayValue) || 0 : 0;
+        if (name && rank > 0) {
+          map.set(name, rank);
+        }
+      }
+    }
+  } catch {
+    // Silently fail — standings are a bonus
+  }
+  return map;
+}
