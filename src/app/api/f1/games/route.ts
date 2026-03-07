@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getEventsByDate } from "@/lib/api/f1";
 import { getF1Standings } from "@/lib/api/standings";
 import {
-  calculateF1Excitement,
-  detectF1EasterEggs,
-  predictF1Excitement,
+  calculateQualifyingExcitement,
+  detectQualifyingEasterEggs,
+  calculateRaceExcitement,
+  detectRaceEasterEggs,
+  predictRaceExcitement,
 } from "@/lib/scoring/f1";
 import { type GameSummary } from "@/lib/scoring/types";
 
@@ -19,58 +21,79 @@ export async function GET(request: NextRequest) {
       getF1Standings(),
     ]);
 
-    const games: GameSummary[] = events.map((event) => {
-      const isFinished = event.status === "STATUS_FINAL";
-      const isScheduled = event.status === "STATUS_SCHEDULED";
+    const games: GameSummary[] = [];
+
+    for (const event of events) {
+      // ── Qualifying card ──
+      // Show on the qualifying day with its own excitement score
+      if (event.qualifying) {
+        const qualFinished = event.qualifying.finished;
+
+        let excitement;
+        let easterEggs;
+
+        if (qualFinished && event.qualifying.results.length > 0) {
+          excitement = calculateQualifyingExcitement(
+            event.qualifying.results,
+            standings
+          );
+          easterEggs = detectQualifyingEasterEggs(event.qualifying.results);
+        }
+
+        const status = qualFinished
+          ? ("finished" as const)
+          : ("scheduled" as const);
+
+        games.push({
+          id: `f1-qual-${event.id}`,
+          homeTeam: event.name,
+          awayTeam: "Qualifying",
+          competition: "Formula 1",
+          sport: "f1" as const,
+          status,
+          excitement,
+          easterEggs,
+          date: event.qualifying.date,
+        });
+      }
+
+      // ── Race card ──
+      // Show on race day with actual score (finished) or prediction (upcoming)
+      const raceFinished = event.race.finished;
+      const hasRaceResults = raceFinished && event.race.results.length >= 2;
 
       let excitement;
       let easterEggs;
 
-      if (isFinished && event.raceResults.length >= 2) {
-        excitement = calculateF1Excitement(event, standings);
-        easterEggs = detectF1EasterEggs(event);
-      } else if (isScheduled || !isFinished) {
-        excitement = predictF1Excitement({
-          qualifyingResults: event.qualifyingResults,
+      if (hasRaceResults) {
+        excitement = calculateRaceExcitement(event, standings);
+        easterEggs = detectRaceEasterEggs(event);
+      } else {
+        // Predict based on qualifying results + standings
+        excitement = predictRaceExcitement({
+          qualifyingResults: event.qualifying?.results,
           standings,
         });
       }
 
-      // Show P1/P2 from race results when finished, or from qualifying when available
-      const hasRaceResults = isFinished && event.raceResults.length >= 2;
-      const hasQualResults = event.qualifyingResults.length >= 2;
-
-      let p1: string;
-      let p2: string;
-      if (hasRaceResults) {
-        p1 = event.raceResults[0].name;
-        p2 = event.raceResults[1].name;
-      } else if (hasQualResults) {
-        p1 = `Pole: ${event.qualifyingResults[0].name}`;
-        p2 = `P2: ${event.qualifyingResults[1].name}`;
-      } else {
-        p1 = event.circuit || event.name;
-        p2 = "Race Weekend";
-      }
-
-      const status = isFinished
+      const status = raceFinished
         ? ("finished" as const)
-        : isScheduled
+        : event.race.status === "STATUS_SCHEDULED"
           ? ("scheduled" as const)
           : ("in_progress" as const);
 
-      return {
-        id: `f1-${event.id}`,
-        homeTeam: p1,
-        awayTeam: p2,
-        competition: event.name,
+      games.push({
+        id: `f1-race-${event.id}`,
+        homeTeam: event.name,
+        awayTeam: "Race",
+        competition: "Formula 1",
         sport: "f1" as const,
         status,
         excitement,
         easterEggs,
-        date: event.endDate,
-      };
-    });
+        date: event.race.date,
+      });
+    }
 
     games.sort(
       (a, b) => (b.excitement?.score ?? -1) - (a.excitement?.score ?? -1)

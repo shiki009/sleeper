@@ -63,15 +63,20 @@ export interface F1Driver {
   teamColor?: string;
 }
 
+export interface F1SessionData {
+  type: "qualifying" | "race";
+  status: string;
+  finished: boolean;
+  date: string;
+  results: F1Driver[];
+}
+
 export interface F1EventData {
   id: string;
   name: string;
   circuit: string;
-  date: string;
-  endDate: string;
-  status: string; // uses the RACE competition status, not the event status
-  qualifyingResults: F1Driver[];
-  raceResults: F1Driver[];
+  qualifying?: F1SessionData;
+  race: F1SessionData;
 }
 
 function formatDate(date: string): string {
@@ -80,12 +85,12 @@ function formatDate(date: string): string {
 
 async function fetchTeamInfo(
   eventId: string,
-  raceCompId: string
+  compId: string
 ): Promise<Map<string, { team: string; color: string }>> {
   const map = new Map<string, { team: string; color: string }>();
   try {
     const res = await fetch(
-      `${ESPN_CORE}/events/${eventId}/competitions/${raceCompId}?lang=en&region=us`,
+      `${ESPN_CORE}/events/${eventId}/competitions/${compId}?lang=en&region=us`,
       { next: { revalidate: 86400 } }
     );
     if (!res.ok) return map;
@@ -101,17 +106,12 @@ async function fetchTeamInfo(
   return map;
 }
 
-/**
- * Parse competitors into F1Driver[], but only when they have an `order` field.
- * Competitors without `order` are just entry lists (race hasn't happened).
- */
 function parseCompetitors(
   competitors: EspnCompetitor[] | undefined,
   teamInfo?: Map<string, { team: string; color: string }>
 ): F1Driver[] {
   if (!competitors) return [];
 
-  // If competitors don't have `order`, the session hasn't produced results yet
   const hasOrder = competitors.some((c) => c.order != null);
   if (!hasOrder) return [];
 
@@ -126,6 +126,22 @@ function parseCompetitors(
         teamColor: info?.color,
       };
     });
+}
+
+function parseSession(
+  comp: EspnCompetition,
+  type: "qualifying" | "race",
+  teamInfo?: Map<string, { team: string; color: string }>
+): F1SessionData {
+  const status = comp.status?.type.name ?? "STATUS_SCHEDULED";
+  const finished = comp.status?.type.completed ?? false;
+  return {
+    type,
+    status,
+    finished,
+    date: comp.date,
+    results: parseCompetitors(comp.competitors, teamInfo),
+  };
 }
 
 export async function getEventsByDate(date: string): Promise<F1EventData[]> {
@@ -152,34 +168,29 @@ export async function getEventsByDate(date: string): Promise<F1EventData[]> {
     );
     if (!raceComp) continue;
 
-    // Use the RACE competition's own status, not the event-level status.
-    // The event status reflects the latest completed session (e.g. qualifying),
-    // while the race may still be scheduled.
-    const raceStatus = raceComp.status?.type.name ?? event.status.type.name;
-    const raceFinished = raceComp.status?.type.completed ?? event.status.type.completed;
-
-    // Fetch team info from core API for finished races
+    // Fetch team info from core API for any completed session
+    const raceFinished = raceComp.status?.type.completed ?? false;
+    const qualFinished = qualComp?.status?.type.completed ?? false;
     let teamInfo: Map<string, { team: string; color: string }> | undefined;
-    if (raceFinished) {
+    if (raceFinished || qualFinished) {
       teamInfo = await fetchTeamInfo(event.id, raceComp.id);
     }
-
-    const qualifyingResults = parseCompetitors(qualComp?.competitors, teamInfo);
-    const raceResults = parseCompetitors(raceComp.competitors, teamInfo);
 
     const circuit = event.circuit
       ? `${event.circuit.fullName}${event.circuit.address?.city ? `, ${event.circuit.address.city}` : ""}`
       : "";
 
+    const gpName = event.name.replace(
+      /^(Louis Vuitton|Heineken|Lenovo|Gulf Air|Crypto\.com|AWS|Pirelli|Qatar Airways) /,
+      ""
+    );
+
     events.push({
       id: event.id,
-      name: event.name.replace(/^(Louis Vuitton|Heineken|Lenovo|Gulf Air|Crypto\.com|AWS|Pirelli|Qatar Airways) /, ""),
+      name: gpName,
       circuit,
-      date: event.date,
-      endDate: event.endDate,
-      status: raceStatus,
-      qualifyingResults,
-      raceResults,
+      qualifying: qualComp ? parseSession(qualComp, "qualifying", teamInfo) : undefined,
+      race: parseSession(raceComp, "race", teamInfo),
     });
   }
 
